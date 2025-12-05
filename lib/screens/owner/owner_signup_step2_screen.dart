@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/owner_signup.dart';
 import 'owner_signup_step3_screen.dart';
 import 'helper.dart';
 
@@ -272,6 +273,16 @@ class _BusinessOwnerSignUpStep2ScreenState
                         height: 48,
                         child: ElevatedButton(
                           onPressed: () {
+                            final model = OwnerSignupModel.instance;
+                            model.businessName = _businessNameController.text.trim();
+                            model.businessType = _businessTypeController.text.trim();
+                            model.street = _streetController.text.trim();
+                            model.city = _cityController.text.trim();
+                            model.state = _stateController.text.trim();
+                            model.postalCode = _postalCodeController.text.trim();
+                            model.phone = _phoneController.text.trim();
+                            model.publicEmail = _publicEmailController.text.trim();
+
                             Navigator.push(
                               context,
                               MaterialPageRoute(

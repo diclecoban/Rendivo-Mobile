@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../services/firebase_service.dart';
 import 'staff_dashboard_screen.dart';
 
 class StaffSignUpScreen extends StatefulWidget {
@@ -255,14 +256,42 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StaffDashboardScreen(),
-                        ),
-                        (route) => false,
-                      );
+                    onPressed: () async {
+                      final fullName = _fullNameController.text.trim();
+                      final email = _emailController.text.trim();
+                      final password = _passwordController.text;
+                      final businessId = _businessIdController.text.trim();
+
+                      if (fullName.isEmpty || email.isEmpty || password.isEmpty || businessId.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Lütfen tüm alanları doldurun.')),
+                        );
+                        return;
+                      }
+
+                      try {
+                        await FirebaseService.signUpWithEmail(
+                          email: email,
+                          password: password,
+                          profileData: {
+                            'fullName': fullName,
+                            'businessId': businessId,
+                            'role': 'staff',
+                          },
+                        );
+
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const StaffDashboardScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Kayıt hatası: $e')),
+                        );
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryPink,

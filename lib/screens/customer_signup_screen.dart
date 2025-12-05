@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../services/firebase_service.dart';
 import 'customer_dashboard_screen.dart';
 
 class CustomerSignUpScreen extends StatefulWidget {
@@ -381,14 +382,44 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isTermsAccepted
-                        ? () {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CustomerDashboardScreen(),
-                              ),
-                              (route) => false,
-                            );
+                        ? () async {
+                            final firstName = _firstNameController.text.trim();
+                            final lastName = _lastNameController.text.trim();
+                            final email = _emailController.text.trim();
+                            final phone = _phoneController.text.trim();
+                            final password = _passwordController.text;
+
+                            if (firstName.isEmpty || email.isEmpty || password.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Lütfen gerekli alanları doldurun.')),
+                              );
+                              return;
+                            }
+
+                            try {
+                              await FirebaseService.signUpWithEmail(
+                                email: email,
+                                password: password,
+                                profileData: {
+                                  'firstName': firstName,
+                                  'lastName': lastName,
+                                  'phone': phone,
+                                  'role': 'customer',
+                                },
+                              );
+
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CustomerDashboardScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Kayıt hatası: $e')),
+                              );
+                            }
                           }
                         : null,
                     style: ElevatedButton.styleFrom(

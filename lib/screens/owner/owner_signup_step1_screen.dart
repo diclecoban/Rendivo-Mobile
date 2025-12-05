@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/owner_signup.dart';
 import 'owner_signup_step2_screen.dart'; // Step2 için
 import 'helper.dart';
 
@@ -287,6 +288,12 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
                         child: ElevatedButton(
                           onPressed: _isTermsAccepted
                               ? () {
+                                  // Save to model
+                                  final model = OwnerSignupModel.instance;
+                                  model.fullName = _fullNameController.text.trim();
+                                  model.email = _emailController.text.trim();
+                                  model.password = _passwordController.text;
+
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -306,13 +313,13 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
                             elevation: 0,
                           ),
                           child: const Text(
-                            'Next Step',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
+                                  'Next Step',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ),

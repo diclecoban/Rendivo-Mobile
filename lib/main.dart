@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/login_screen.dart';
 
-void main() {
+// If you run `flutterfire configure` this file will be generated.
+// If you don't have it, Firebase.initializeApp() below will still work for
+// default options but it's recommended to generate firebase_options.dart.
+// import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    // ignore: avoid_print
+    print('Firebase init error: $e');
+  }
+
   runApp(const MyApp());
 }
 

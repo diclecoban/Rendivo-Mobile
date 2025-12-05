@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
+import '../services/firebase_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+
 import 'signup_role_screen.dart';
+import 'business_dashboard_screen.dart';
+import 'customer_dashboard_screen.dart';
+import 'staff_dashboard_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -192,9 +200,72 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: Login işlemini burada yapacaksın
+                          onPressed: () async {
+                            final email = _emailController.text.trim();
+                            final password = _passwordController.text;
+
+                            if (email.isEmpty || password.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Email ve şifreyi doldur.')),
+                              );
+                              return;
+                            }
+
+                            try {
+                              final cred = await FirebaseService.signInWithEmail(
+                                email: email,
+                                password: password,
+                              );
+
+                              final uid = cred.user?.uid;
+                              if (uid == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Kullanıcı bilgisi alınamadı.')),
+                                );
+                                return;
+                              }
+
+                              final doc = await FirebaseService.getProfile(uid);
+                              final data = doc.data();
+                              final role = data?['role'] as String?;
+
+                              if (role == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Rol bilgisi bulunamadı.')),
+                                );
+                                return;
+                              }
+
+                              Widget targetScreen;
+                              switch (role) {
+                                case 'business':
+                                  targetScreen = const BusinessDashboardScreen();
+                                  break;
+                                case 'staff':
+                                  targetScreen = const StaffDashboardScreen();
+                                  break;
+                                case 'customer':
+                                default:
+                                  targetScreen = const CustomerDashboardScreen();
+                                  break;
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Giriş başarılı ✅ ($role)')),
+                              );
+
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => targetScreen),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Hata: $e')),
+                              );
+                            }
                           },
+
+
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryPink,
                             shape: RoundedRectangleBorder(
