@@ -1,7 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/utils/auth_error_mapper.dart';
 import '../core/utils/validators.dart';
 import '../services/firebase_service.dart';
 import 'business_dashboard_screen.dart';
@@ -61,7 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final uid = cred.user?.uid;
       if (uid == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User info could not be retrieved.')),
+          const SnackBar(
+            content:
+                Text('We could not load your account details. Please try again.'),
+          ),
         );
         return;
       }
@@ -72,7 +77,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (role == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Role info not found.')),
+          const SnackBar(
+            content: Text(
+              'We could not determine your user role. Please contact support.',
+            ),
+          ),
         );
         return;
       }
@@ -92,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login successful ($role)')),
+        const SnackBar(content: Text('Welcome back! Logging you in...')),
       );
 
       // ignore: use_build_context_synchronously
@@ -100,13 +109,24 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(builder: (_) => targetScreen),
       );
-    } on FirebaseException catch (e) {
+    } on FirebaseAuthException catch (e) {
+      final message = mapAuthErrorMessage(e.code, isSignUp: false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Login error.')),
+        SnackBar(content: Text(message)),
+      );
+    } on FirebaseException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'We could not reach the authentication service. Please try again.',
+          ),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: $e')),
+        const SnackBar(
+          content: Text('Something unexpected happened. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) {

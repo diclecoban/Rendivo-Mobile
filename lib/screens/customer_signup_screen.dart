@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/utils/auth_error_mapper.dart';
 import '../core/utils/validators.dart';
 import '../services/firebase_service.dart';
 import 'customer_dashboard_screen.dart';
@@ -78,7 +79,9 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
 
     if (!_isTermsAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please accept the terms to continue.')),
+        const SnackBar(
+          content: Text('Please accept the Terms of Service to continue.'),
+        ),
       );
       return;
     }
@@ -102,7 +105,9 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully.')),
+        const SnackBar(
+          content: Text('All set! Your account has been created.'),
+        ),
       );
       Navigator.pushAndRemoveUntil(
         context,
@@ -112,12 +117,17 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
         (route) => false,
       );
     } on FirebaseAuthException catch (e) {
+      final message = mapAuthErrorMessage(e.code, isSignUp: true);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Registration error.')),
+        SnackBar(content: Text(message)),
       );
-    } catch (e) {
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration error: $e')),
+        const SnackBar(
+          content: Text(
+            'We could not complete your registration. Please try again in a moment.',
+          ),
+        ),
       );
     } finally {
       if (mounted) {

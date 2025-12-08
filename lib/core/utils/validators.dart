@@ -6,19 +6,21 @@ final _lowerCase = RegExp(r'[a-z]');
 final _digit = RegExp(r'\d');
 
 String? validateRequired(String value, String fieldLabel, {int minLength = 1}) {
-  if (value.trim().isEmpty) {
-    return '$fieldLabel cannot be empty';
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return 'Please enter your $fieldLabel.';
   }
-  if (value.trim().length < minLength) {
-    return '$fieldLabel must be at least $minLength characters';
+  if (trimmed.length < minLength) {
+    return '$fieldLabel should be at least $minLength characters.';
   }
   return null;
 }
 
 String? validateEmail(String value) {
-  if (value.trim().isEmpty) return 'Email is required';
-  if (!_emailRegex.hasMatch(value.trim())) {
-    return 'Enter a valid email address';
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return 'Please enter your email address.';
+  if (!_emailRegex.hasMatch(trimmed)) {
+    return 'That email does not look right. Please check it again.';
   }
   return null;
 }
@@ -27,8 +29,8 @@ String? validatePassword(
   String value, {
   bool requireComplexity = true,
 }) {
-  if (value.isEmpty) return 'Password is required';
-  if (value.length < 8) return 'Password must be at least 8 characters';
+  if (value.isEmpty) return 'Please create a password.';
+  if (value.length < 8) return 'Use at least 8 characters.';
 
   if (!requireComplexity) return null;
 
@@ -37,16 +39,17 @@ String? validatePassword(
   final hasDigit = _digit.hasMatch(value);
 
   if (!hasUpper || !hasLower || !hasDigit) {
-    return 'Use upper, lower case letters and a digit';
+    return 'Add at least one upper-case letter, one lower-case letter, and a number.';
   }
   return null;
 }
 
 String? validatePhone(String value) {
-  if (value.trim().isEmpty) return null;
-  final digits = value.replaceAll(RegExp(r'\D'), '');
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final digits = trimmed.replaceAll(RegExp(r'\D'), '');
   if (digits.length < 10) {
-    return 'Phone number must include at least 10 digits';
+    return 'Phone numbers need at least 10 digits.';
   }
   return null;
 }
