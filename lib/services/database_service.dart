@@ -2,23 +2,42 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-class FirebaseService {
-  FirebaseService._();
-  static final auth = FirebaseAuth.instance;
-  static final firestore = FirebaseFirestore.instance;
+/// DatabaseService
+/// A thin consolidated service that uses Firebase Auth + Firestore directly.
+/// Use this when you don't want a separate backend and prefer client -> Firebase.
+class DatabaseService {
+  DatabaseService._();
 
-  // --------------------------- Auth helpers ---------------------------
-  static Future<UserCredential> signUpWithEmail({
+  static final FirebaseAuth auth = FirebaseAuth.instance;
+  static final FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+  /// Optional: ensure Firebase is initialized (main.dart usually does this).
+  static Future<void> ensureInitialized() async {
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {
+      // already initialized or failed; ignore here — caller can handle errors
+    }
+  }
+
+  // --------------------------- Auth ---------------------------
+  static Future<UserCredential> signIn({required String email, required String password}) async {
+    return await auth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
+  static Future<void> signOut() async {
+    await auth.signOut();
+  }
+
+  // Helper to create user and profile doc
+  static Future<UserCredential> _createUserWithProfile({
     required String email,
     required String password,
     required Map<String, dynamic> profileData,
   }) async {
-    final cred = await auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-
+    final cred = await auth.createUserWithEmailAndPassword(email: email, password: password);
     final uid = cred.user?.uid;
     if (uid != null) {
       await firestore.collection('users').doc(uid).set({
@@ -27,35 +46,31 @@ class FirebaseService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
-
     return cred;
   }
 
-  static Future<UserCredential> signInWithEmail({
+  static Future<UserCredential> registerCustomer({
+    required String firstName,
+    String? lastName,
     required String email,
     required String password,
+    String? phone,
   }) async {
-    return await auth.signInWithEmailAndPassword(
+    final fullName = [firstName, lastName].where((s) => s != null && s.isNotEmpty).join(' ');
+    return await _createUserWithProfile(
       email: email,
       password: password,
+      profileData: {
+        'firstName': firstName,
+        'lastName': lastName ?? '',
+        'fullName': fullName,
+        'phone': phone ?? '',
+        'role': 'customer',
+      },
     );
   }
 
-  static Future<void> signOut() async {
-    await auth.signOut();
-  }
-
-  static Future<DocumentSnapshot<Map<String, dynamic>>> getProfile(String uid) async {
-    return await firestore.collection('users').doc(uid).get();
-  }
-
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) async {
-    await firestore.collection('users').doc(uid).update(data);
-  }
-
-  // --------------------------- Business & Staff flows ---------------------------
-
-  // Generate a short unique Business ID (uppercase alnum). Ensures uniqueness by checking 'businesses' collection.
+  // --------------------------- Business & Staff ---------------------------
   static Future<String> _generateUniqueBusinessId({int length = 8}) async {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rnd = Random.secure();
@@ -68,19 +83,17 @@ class FirebaseService {
       if (q.docs.isEmpty) return candidate;
     }
 
-    // fallback with timestamp
     return 'BIZ${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
   }
 
-  // Create a business owner account and business record in a single flow
-  static Future<Map<String, dynamic>> registerBusiness({
+  /// Create a business owner account + business document + staff_members entry.
+  static Future<Map<String, dynamic>> createBusiness({
     required String ownerFullName,
     required String email,
     required String password,
     required Map<String, dynamic> businessData,
   }) async {
-    // 1) Create auth user
-    final cred = await signUpWithEmail(
+    final cred = await _createUserWithProfile(
       email: email,
       password: password,
       profileData: {
@@ -91,7 +104,6 @@ class FirebaseService {
 
     final uid = cred.user!.uid;
 
-    // 2) Create business record
     final businessId = await _generateUniqueBusinessId();
     final docRef = await firestore.collection('businesses').add({
       'ownerId': uid,
@@ -107,7 +119,6 @@ class FirebaseService {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // 3) Optionally add owner as staff member in a 'staff_members' collection
     await firestore.collection('staff_members').add({
       'userId': uid,
       'businessDocId': docRef.id,
@@ -125,21 +136,19 @@ class FirebaseService {
     };
   }
 
-  // Register staff: validate businessId exists, then create user and staff_members entry
-  static Future<Map<String, dynamic>> registerStaff({
+  /// Register staff (creates auth user and staff_members entry)
+  static Future<Map<String, dynamic>> addStaff({
     required String fullName,
     required String email,
     required String password,
     required String businessId,
     String position = 'staff',
   }) async {
-    // find business by businessId
     final q = await firestore.collection('businesses').where('businessId', isEqualTo: businessId).limit(1).get();
     if (q.docs.isEmpty) throw Exception('Business ID not found');
-
     final businessDoc = q.docs.first;
 
-    final cred = await signUpWithEmail(
+    final cred = await _createUserWithProfile(
       email: email,
       password: password,
       profileData: {
@@ -168,37 +177,7 @@ class FirebaseService {
     };
   }
 
-  // Register customer: simple user creation with role customer
-  static Future<UserCredential> registerCustomer({
-    required String firstName,
-    String? lastName,
-    required String email,
-    required String password,
-    String? phone,
-  }) async {
-    final fullName = [firstName, lastName].where((s) => s != null && s.isNotEmpty).join(' ');
-    return await signUpWithEmail(
-      email: email,
-      password: password,
-      profileData: {
-        'firstName': firstName,
-        'lastName': lastName ?? '',
-        'fullName': fullName,
-        'phone': phone ?? '',
-        'role': 'customer',
-      },
-    );
-  }
-
-  // Lookup business by businessId
-  static Future<DocumentSnapshot<Map<String, dynamic>>?> getBusinessByBusinessId(String businessId) async {
-    final q = await firestore.collection('businesses').where('businessId', isEqualTo: businessId).limit(1).get();
-    if (q.docs.isEmpty) return null;
-    return q.docs.first as DocumentSnapshot<Map<String, dynamic>>;
-  }
-
-  // Add an existing user to staff_members (useful if user already exists)
-  static Future<void> addStaffToBusiness({
+  static Future<void> addExistingUserToBusiness({
     required String userId,
     required String businessDocId,
     required String businessId,
@@ -215,7 +194,38 @@ class FirebaseService {
     });
   }
 
-  // Convenience: get current user's role from Firestore doc
+  static Future<DocumentSnapshot<Map<String, dynamic>>?> getBusinessById(String businessId) async {
+    final q = await firestore.collection('businesses').where('businessId', isEqualTo: businessId).limit(1).get();
+    if (q.docs.isEmpty) return null;
+    return q.docs.first as DocumentSnapshot<Map<String, dynamic>>;
+  }
+
+  // --------------------------- Appointments ---------------------------
+  static Future<DocumentReference> createAppointment({
+    required String businessDocId,
+    required Map<String, dynamic> appointmentData,
+  }) async {
+    final ref = firestore.collection('businesses').doc(businessDocId).collection('appointments').doc();
+    await ref.set({
+      ...appointmentData,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return ref;
+  }
+
+  static Future<QuerySnapshot<Map<String, dynamic>>> listAppointmentsForBusiness(String businessDocId) async {
+    return await firestore.collection('businesses').doc(businessDocId).collection('appointments').orderBy('startAt', descending: false).get();
+  }
+
+  // --------------------------- Profile ---------------------------
+  static Future<DocumentSnapshot<Map<String, dynamic>>> getProfile(String uid) async {
+    return await firestore.collection('users').doc(uid).get();
+  }
+
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data) async {
+    await firestore.collection('users').doc(uid).update(data);
+  }
+
   static Future<String?> getCurrentUserRole() async {
     final user = auth.currentUser;
     if (user == null) return null;
@@ -223,4 +233,3 @@ class FirebaseService {
     return doc.data()?['role'] as String?;
   }
 }
-

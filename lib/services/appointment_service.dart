@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_service.dart';
 
 class AppointmentService {
   AppointmentService._();
+
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Create a simple appointment for a business
   static Future<DocumentReference> createAppointment({
@@ -10,11 +11,7 @@ class AppointmentService {
     required Map<String, dynamic> appointmentData,
   }) async {
     // store under businesses/{businessDocId}/appointments
-    final ref = FirebaseService.firestore
-        .collection('businesses')
-        .doc(businessDocId)
-        .collection('appointments')
-        .doc();
+    final ref = _firestore.collection('businesses').doc(businessDocId).collection('appointments').doc();
 
     await ref.set({
       ...appointmentData,
@@ -25,11 +22,6 @@ class AppointmentService {
   }
 
   static Future<QuerySnapshot<Map<String, dynamic>>> listAppointmentsForBusiness(String businessDocId) async {
-    return FirebaseService.firestore
-        .collection('businesses')
-        .doc(businessDocId)
-        .collection('appointments')
-        .orderBy('startAt', descending: false)
-        .get();
+    return _firestore.collection('businesses').doc(businessDocId).collection('appointments').orderBy('startAt', descending: false).get();
   }
 }
