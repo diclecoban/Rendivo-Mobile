@@ -1,27 +1,36 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/app_models.dart';
+import 'backend_service.dart';
 
 class AppointmentService {
   AppointmentService._();
 
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final BackendService _backend = BackendService.instance;
 
-  // Create a simple appointment for a business
-  static Future<DocumentReference> createAppointment({
-    required String businessDocId,
-    required Map<String, dynamic> appointmentData,
+  static Future<String> createAppointment({
+    required Business business,
+    required AuthUser customer,
+    required List<ServiceItem> services,
+    required DateTime startAt,
+    required DateTime endAt,
+    StaffMember? staff,
+    String? notes,
   }) async {
-    // store under businesses/{businessDocId}/appointments
-    final ref = _firestore.collection('businesses').doc(businessDocId).collection('appointments').doc();
+    final totalPrice = services.fold<double>(
+      0,
+      (sum, item) => sum + item.price,
+    );
+    final totalDuration = services.fold<int>(
+      0,
+      (sum, item) => sum + item.durationMinutes,
+    );
 
-    await ref.set({
-      ...appointmentData,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    return ref;
-  }
-
-  static Future<QuerySnapshot<Map<String, dynamic>>> listAppointmentsForBusiness(String businessDocId) async {
-    return _firestore.collection('businesses').doc(businessDocId).collection('appointments').orderBy('startAt', descending: false).get();
+    return _backend.createAppointment(
+      businessId: business.id,
+      serviceIds: services.map((s) => s.id).toList(),
+      startAt: startAt,
+      endAt: endAt,
+      staffId: staff?.id,
+      notes: notes,
+    );
   }
 }

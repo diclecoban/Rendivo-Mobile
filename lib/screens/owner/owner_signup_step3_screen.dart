@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
-import '../../models/owner_signup.dart';
-import '../../services/firebase_service.dart';
-import '../business_dashboard_screen.dart';
 
 class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
   const BusinessOwnerSignUpStep3Screen({super.key});
@@ -191,51 +188,14 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () async {
-                      final model = OwnerSignupModel.instance;
-
-                      final email = model.email.trim();
-                      final password = model.password;
-
-                      if (email.isEmpty || password.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Hesap bilgileri eksik.')),
-                        );
-                        return;
-                      }
-
-                      try {
-                        await FirebaseService.signUpWithEmail(
-                          email: email,
-                          password: password,
-                          profileData: {
-                            'fullName': model.fullName,
-                            'role': 'business',
-                            'businessName': model.businessName,
-                            'businessType': model.businessType,
-                            'address': {
-                              'street': model.street,
-                              'city': model.city,
-                              'state': model.state,
-                              'postalCode': model.postalCode,
-                            },
-                            'phone': model.phone,
-                            'publicEmail': model.publicEmail,
-                          },
-                        );
-
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BusinessDashboardScreen(),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Business onboarding will be re-enabled after integrating the new API.',
                           ),
-                          (route) => false,
-                        );
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Kayıt hatası: $e')),
-                        );
-                      }
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryPink,

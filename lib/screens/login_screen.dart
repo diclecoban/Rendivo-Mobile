@@ -1,11 +1,9 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
-import '../core/utils/auth_error_mapper.dart';
 import '../core/utils/validators.dart';
-import '../services/firebase_service.dart';
+import '../models/app_models.dart';
+import '../services/auth_service.dart';
 import 'business_dashboard_screen.dart';
 import 'customer_dashboard_screen.dart';
 import 'signup_role_screen.dart';
@@ -55,39 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final cred = await FirebaseService.signInWithEmail(
-        email: email,
-        password: password,
-      );
-
-      final uid = cred.user?.uid;
-      if (uid == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('We could not load your account details. Please try again.'),
-          ),
-        );
-        return;
-      }
-
-      final doc = await FirebaseService.getProfile(uid);
-      final data = doc.data();
-      final role = data?['role'] as String?;
-
-      if (role == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'We could not determine your user role. Please contact support.',
-            ),
-          ),
-        );
-        return;
-      }
+      final user = await AuthService.signIn(email, password);
+      if (!mounted) return;
 
       Widget targetScreen;
-      switch (role) {
+      switch (user.role) {
         case 'business':
           targetScreen = const BusinessDashboardScreen();
           break;
@@ -101,28 +71,18 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Welcome back! Logging you in...')),
+        SnackBar(content: Text('Welcome back, ${user.fullName}!')),
       );
 
-      // ignore: use_build_context_synchronously
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => targetScreen),
       );
-    } on FirebaseAuthException catch (e) {
-      final message = mapAuthErrorMessage(e.code, isSignUp: false);
+    } on AppException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(content: Text(e.message)),
       );
-    } on FirebaseException {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'We could not reach the authentication service. Please try again.',
-          ),
-        ),
-      );
-    } catch (e) {
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Something unexpected happened. Please try again.'),

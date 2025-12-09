@@ -1,16 +1,15 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
 
 class AppointmentDetailsScreen extends StatefulWidget {
-  final DocumentReference<Map<String, dynamic>>? appointmentRef;
-  final Map<String, dynamic>? appointmentData;
+  final Appointment appointment;
 
   const AppointmentDetailsScreen({
     super.key,
-    this.appointmentRef,
-    this.appointmentData,
+    required this.appointment,
   });
 
   @override
@@ -19,129 +18,29 @@ class AppointmentDetailsScreen extends StatefulWidget {
 }
 
 class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
-  Map<String, dynamic>? _data;
-  bool _isLoading = false;
-  String? _error;
+  late Appointment _appointment;
   bool _isActionInProgress = false;
   bool _hasChanges = false;
 
   @override
   void initState() {
     super.initState();
-    _data = widget.appointmentData;
-    if (_data == null && widget.appointmentRef != null) {
-      _fetchAppointment();
-    }
-  }
-
-  Future<void> _fetchAppointment() async {
-    final ref = widget.appointmentRef;
-    if (ref == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final snapshot = await ref.get();
-      if (!snapshot.exists) {
-        setState(() {
-          _error = 'Appointment not found.';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      setState(() {
-        _data = snapshot.data();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to load appointment: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Map<String, dynamic> get _safeData => _data ?? {};
-
-  DateTime? _parseDate(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    return null;
-  }
-
-  List<dynamic> get _services =>
-      (_safeData['services'] as List<dynamic>?) ??
-      (_safeData['serviceNames'] as List<dynamic>?) ??
-      const [];
-
-  int get _durationMinutes =>
-      (_safeData['totalDurationMinutes'] as num?)?.toInt() ?? 60;
-
-  double? get _totalPrice => (_safeData['totalPrice'] as num?)?.toDouble();
-
-  String get _status => (_safeData['status'] as String?) ?? 'pending';
-
-  String _statusLabel(String status) => status.isEmpty
-      ? 'Pending'
-      : status[0].toUpperCase() + status.substring(1);
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'confirmed':
-        return const Color(0xFF1F8E4D);
-      case 'cancelled':
-        return Colors.redAccent;
-      default:
-        return primaryPink;
-    }
+    _appointment = widget.appointment;
   }
 
   Future<void> _handleCancel() async {
-    final ref = widget.appointmentRef;
-    if (ref == null) {
-      _showSnack('Appointment reference missing.');
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Cancel appointment?'),
-            content: const Text(
-              'Are you sure you want to cancel this appointment? This action cannot be undone.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Keep'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Cancel Appointment'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed) return;
-
     setState(() => _isActionInProgress = true);
     try {
-      await ref.update({'status': 'cancelled'});
+      await BackendService.instance.cancelAppointment(_appointment.id);
       setState(() {
-        _data = {
-          ..._safeData,
-          'status': 'cancelled',
-        };
+        _appointment = _appointment.copyWith(status: 'cancelled');
         _isActionInProgress = false;
         _hasChanges = true;
       });
       _showSnack('Appointment cancelled.');
+    } on AppException catch (e) {
+      setState(() => _isActionInProgress = false);
+      _showSnack(e.message);
     } catch (e) {
       setState(() => _isActionInProgress = false);
       _showSnack('Failed to cancel: $e');
@@ -149,16 +48,9 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
   }
 
   Future<void> _handleReschedule() async {
-    final ref = widget.appointmentRef;
-    if (ref == null) {
-      _showSnack('Appointment reference missing.');
-      return;
-    }
-
-    final currentStart = _parseDate(_safeData['startAt']);
     final pickedDate = await showDatePicker(
       context: context,
-      initialDate: currentStart ?? DateTime.now().add(const Duration(days: 1)),
+      initialDate: _appointment.startAt.add(const Duration(days: 1)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
@@ -166,9 +58,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
 
     final pickedTime = await showTimePicker(
       context: context,
-      initialTime: currentStart != null
-          ? TimeOfDay.fromDateTime(currentStart)
-          : const TimeOfDay(hour: 10, minute: 0),
+      initialTime: TimeOfDay.fromDateTime(_appointment.startAt),
     );
     if (pickedTime == null) return;
 
@@ -179,28 +69,34 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
       pickedTime.hour,
       pickedTime.minute,
     );
-    final newEnd = newStart.add(Duration(minutes: _durationMinutes));
+    final newEnd = newStart.add(
+      Duration(
+        minutes: _appointment.totalDurationMinutes > 0
+            ? _appointment.totalDurationMinutes
+            : 30,
+      ),
+    );
 
     setState(() => _isActionInProgress = true);
     try {
-      await ref.update({
-        'appointmentDate': Timestamp.fromDate(newStart),
-        'startAt': Timestamp.fromDate(newStart),
-        'endAt': Timestamp.fromDate(newEnd),
-        'status': 'pending',
-      });
+      await BackendService.instance.rescheduleAppointment(
+        appointmentId: _appointment.id,
+        startAt: newStart,
+        endAt: newEnd,
+      );
       setState(() {
-        _data = {
-          ..._safeData,
-          'appointmentDate': Timestamp.fromDate(newStart),
-          'startAt': Timestamp.fromDate(newStart),
-          'endAt': Timestamp.fromDate(newEnd),
-          'status': 'pending',
-        };
+        _appointment = _appointment.copyWith(
+          startAt: newStart,
+          endAt: newEnd,
+          status: 'pending',
+        );
         _isActionInProgress = false;
         _hasChanges = true;
       });
       _showSnack('Appointment rescheduled.');
+    } on AppException catch (e) {
+      setState(() => _isActionInProgress = false);
+      _showSnack(e.message);
     } catch (e) {
       setState(() => _isActionInProgress = false);
       _showSnack('Failed to reschedule: $e');
@@ -208,14 +104,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
   }
 
   Future<void> _handleEditNotes() async {
-    final ref = widget.appointmentRef;
-    if (ref == null) {
-      _showSnack('Appointment reference missing.');
-      return;
-    }
-
-    final controller =
-        TextEditingController(text: _safeData['notes'] as String? ?? '');
+    final controller = TextEditingController(text: _appointment.notes);
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -244,16 +133,19 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
 
     setState(() => _isActionInProgress = true);
     try {
-      await ref.update({'notes': result});
+      await BackendService.instance.updateAppointmentNotes(
+        appointmentId: _appointment.id,
+        notes: result,
+      );
       setState(() {
-        _data = {
-          ..._safeData,
-          'notes': result,
-        };
+        _appointment = _appointment.copyWith(notes: result);
         _isActionInProgress = false;
         _hasChanges = true;
       });
       _showSnack('Notes updated.');
+    } on AppException catch (e) {
+      setState(() => _isActionInProgress = false);
+      _showSnack(e.message);
     } catch (e) {
       setState(() => _isActionInProgress = false);
       _showSnack('Failed to update notes: $e');
@@ -295,27 +187,18 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
           ),
         ),
         body: SafeArea(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(child: Text(_error!))
-                  : _data == null
-                      ? const Center(
-                          child: Text('Appointment data unavailable.'),
-                        )
-                      : _buildContent(),
+          child: _buildContent(),
         ),
       ),
     );
   }
 
   Widget _buildContent() {
-    final start = _parseDate(_safeData['startAt']);
-    final end = _parseDate(_safeData['endAt']);
-    final staffName = _safeData['staffName'] as String? ?? 'Team Member';
-    final customerName = _safeData['customerName'] as String? ?? 'Customer';
-    final customerEmail = _safeData['customerEmail'] as String? ?? '';
-    final notes = _safeData['notes'] as String? ?? '';
+    final start = _appointment.startAt;
+    final end = _appointment.endAt;
+    final staffName = _appointment.staffName ?? 'Team Member';
+    final services = _appointment.services;
+    final status = _appointment.status;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -327,15 +210,15 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _statusColor(_status).withOpacity(0.12),
+                color: _statusColor(status).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                _statusLabel(_status),
+                status[0].toUpperCase() + status.substring(1),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: _statusColor(_status),
+                  color: _statusColor(status),
                 ),
               ),
             ),
@@ -348,15 +231,13 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                 _IconTextRow(
                   icon: Icons.calendar_month_outlined,
                   title: 'Date & Time',
-                  value: start == null
-                      ? 'TBD'
-                      : '${_formatDate(start)}${end != null ? ' · ${_formatTimeRange(start, end)}' : ''}',
+                  value: '${_formatDate(start)} - ${_formatTimeRange(start, end)}',
                 ),
                 const SizedBox(height: 16),
                 _IconTextRow(
                   icon: Icons.store_mall_directory_outlined,
                   title: 'Business',
-                  value: _safeData['businessName'] as String? ?? 'Business',
+                  value: _appointment.businessName,
                 ),
                 const SizedBox(height: 16),
                 _IconTextRow(
@@ -386,9 +267,9 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                       radius: 18,
                       backgroundColor: primaryPink,
                       child: Text(
-                        customerName.isEmpty
+                        _appointment.customerName.isEmpty
                             ? '?'
-                            : customerName[0].toUpperCase(),
+                            : _appointment.customerName[0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -401,16 +282,16 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            customerName,
+                            _appointment.customerName,
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (customerEmail.isNotEmpty) ...[
+                          if (_appointment.customerEmail.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
-                              customerEmail,
+                              _appointment.customerEmail,
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey,
@@ -438,31 +319,18 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_services.isEmpty)
+                if (services.isEmpty)
                   const Text(
                     'No services listed.',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   )
                 else
-                  ..._services.map((service) {
-                    if (service is Map<String, dynamic>) {
-                      final name = service['name'] ?? 'Service';
-                      final price = service['price'];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _PriceRow(
-                          label: name.toString(),
-                          amount: price is num
-                              ? _formatPrice(price)
-                              : (price?.toString() ?? ''),
-                        ),
-                      );
-                    }
+                  ...services.map((service) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _PriceRow(
-                        label: service.toString(),
-                        amount: '',
+                        label: service.name,
+                        amount: _formatPrice(service.price),
                       ),
                     );
                   }),
@@ -482,17 +350,11 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_totalPrice != null)
-                  _PriceRow(
-                    label: 'Total',
-                    amount: _formatPrice(_totalPrice!),
-                    isBold: true,
-                  )
-                else
-                  const Text(
-                    'Total amount not available.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
+                _PriceRow(
+                  label: 'Total',
+                  amount: _formatPrice(_appointment.totalPrice),
+                  isBold: true,
+                ),
               ],
             ),
           ),
@@ -510,7 +372,9 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  notes.isEmpty ? 'No notes added.' : notes,
+                  _appointment.notes.isEmpty
+                      ? 'No notes added.'
+                      : _appointment.notes,
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.grey,
@@ -585,6 +449,17 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
     );
   }
 
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'confirmed':
+        return const Color(0xFF1F8E4D);
+      case 'cancelled':
+        return Colors.redAccent;
+      default:
+        return primaryPink;
+    }
+  }
+
   String _formatDate(DateTime date) {
     final months = [
       'Jan',
@@ -615,6 +490,16 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
   }
 
   String _formatPrice(num value) => '\$${value.toStringAsFixed(2)}';
+
+  String _initials(String value) {
+    final parts = value.trim().split(' ');
+    if (parts.length == 1) {
+      return parts.first.isEmpty ? '?' : parts.first.characters.first;
+    }
+    final first = parts.first.characters.first;
+    final last = parts.last.characters.first;
+    return (first + last).toUpperCase();
+  }
 }
 
 class _DetailsCard extends StatelessWidget {

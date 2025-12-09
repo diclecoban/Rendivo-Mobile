@@ -1,10 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
+import '../services/session_service.dart';
 import 'appointment_details_screen.dart';
-import 'customer_booking_screen.dart';
 
 class CustomerAppointmentsScreen extends StatefulWidget {
   const CustomerAppointmentsScreen({super.key});
@@ -16,9 +16,12 @@ class CustomerAppointmentsScreen extends StatefulWidget {
 
 class _CustomerAppointmentsScreenState
     extends State<CustomerAppointmentsScreen> {
+  final _backend = BackendService.instance;
+  final _session = SessionService.instance;
+
   bool _isLoading = true;
   String? _error;
-  List<_CustomerAppointment> _appointments = [];
+  List<Appointment> _appointments = [];
 
   @override
   void initState() {
@@ -27,47 +30,29 @@ class _CustomerAppointmentsScreenState
   }
 
   Future<void> _loadAppointments() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (_session.authToken == null) {
       setState(() {
-        _error = 'You need to log in to view appointments.';
+        _error = 'Please sign in to view appointments.';
         _isLoading = false;
       });
       return;
     }
 
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-
-      final snapshot = await FirebaseFirestore.instance
-          .collectionGroup('appointments')
-          .where('customerId', isEqualTo: user.uid)
-          .orderBy('startAt', descending: false)
-          .get();
-
-      final items = snapshot.docs.map((doc) {
-        final data = doc.data();
-        final startAt = (data['startAt'] as Timestamp?)?.toDate();
-        final endAt = (data['endAt'] as Timestamp?)?.toDate();
-        return _CustomerAppointment(
-          reference: doc.reference,
-          parentBusinessRef: doc.reference.parent.parent,
-          data: data,
-          startAt: startAt,
-          endAt: endAt,
-        );
-      }).toList()
-        ..sort((a, b) {
-          final aTime = a.startAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final bTime = b.startAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return aTime.compareTo(bTime);
-        });
-
+      final items = await _backend.fetchCustomerAppointments();
+      items.sort((a, b) => a.startAt.compareTo(b.startAt));
       setState(() {
         _appointments = items;
+        _isLoading = false;
+      });
+    } on AppException catch (e) {
+      setState(() {
+        _error = e.message;
         _isLoading = false;
       });
     } catch (e) {
@@ -78,73 +63,82 @@ class _CustomerAppointmentsScreenState
     }
   }
 
-  Future<void> _cancelAppointment(_CustomerAppointment appointment) async {
+  Future<void> _cancelAppointment(Appointment appointment) async {
     try {
-      await appointment.reference.update({'status': 'cancelled'});
+      await _backend.cancelAppointment(appointment.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Appointment cancelled.')),
         );
         _loadAppointments();
       }
+    } on AppException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to cancel: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel: $e')),
+      );
     }
   }
 
-  Future<void> _rescheduleAppointment(
-    _CustomerAppointment appointment,
-  ) async {
-    final businessRef = appointment.parentBusinessRef;
-    if (businessRef == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Business reference not found.')),
-      );
-      return;
-    }
+  Future<void> _rescheduleAppointment(Appointment appointment) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: appointment.startAt,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (pickedDate == null) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(appointment.startAt),
+    );
+    if (pickedTime == null) return;
+
+    final newStart = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+    final minutes =
+        appointment.totalDurationMinutes > 0 ? appointment.totalDurationMinutes : 30;
+    final newEnd = newStart.add(Duration(minutes: minutes));
+
     try {
-      final businessDoc = await businessRef.get();
-      if (!businessDoc.exists) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Business not found.')),
-        );
-        return;
-      }
-
-      final result = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CustomerBookingScreen(
-            businessDocId: businessDoc.id,
-            businessData: businessDoc.data() ?? {},
-          ),
-        ),
+      await _backend.rescheduleAppointment(
+        appointmentId: appointment.id,
+        startAt: newStart,
+        endAt: newEnd,
       );
-
-      if (result == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appointment rescheduled.')),
+        );
         _loadAppointments();
       }
+    } on AppException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to reschedule: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reschedule: $e')),
+      );
     }
   }
 
-  Future<void> _openDetails(_CustomerAppointment appointment) async {
+  Future<void> _openDetails(Appointment appointment) async {
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => AppointmentDetailsScreen(
-          appointmentRef: appointment.reference,
-          appointmentData: appointment.data,
-        ),
+        builder: (_) => AppointmentDetailsScreen(appointment: appointment),
       ),
     );
 
@@ -225,14 +219,13 @@ class _CustomerAppointmentsScreenState
 }
 
 class _CalendarStrip extends StatelessWidget {
-  final List<_CustomerAppointment> appointments;
+  final List<Appointment> appointments;
 
   const _CalendarStrip({required this.appointments});
 
   bool _hasAppointmentOn(DateTime date) {
     return appointments.any((appt) {
       final start = appt.startAt;
-      if (start == null) return false;
       return start.year == date.year &&
           start.month == date.month &&
           start.day == date.day;
@@ -311,7 +304,7 @@ class _CalendarStrip extends StatelessWidget {
 }
 
 class _AppointmentCard extends StatelessWidget {
-  final _CustomerAppointment appointment;
+  final Appointment appointment;
   final VoidCallback onCancel;
   final VoidCallback onReschedule;
   final VoidCallback? onTap;
@@ -336,18 +329,13 @@ class _AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title =
-        (appointment.data['serviceNames'] as List<dynamic>?)?.join(', ') ??
-            'Services';
-    final businessName =
-        appointment.data['businessName'] as String? ?? 'Business';
-    final status = (appointment.data['status'] as String?) ?? 'pending';
+    final services = appointment.services.map((s) => s.name).join(', ');
+    final status = appointment.status;
     final start = appointment.startAt;
     final end = appointment.endAt;
 
-    final timeLabel = start == null
-        ? ''
-        : '${_formatDate(start)}${end != null ? ' · ${_formatTimeRange(start, end)}' : ''}';
+    final timeLabel =
+        '${_formatDate(start)} - ${_formatTimeRange(start, end)}';
 
     return InkWell(
       onTap: onTap,
@@ -376,7 +364,7 @@ class _AppointmentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      services.isEmpty ? 'Services' : services,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -384,7 +372,7 @@ class _AppointmentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      businessName,
+                      appointment.businessName,
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
@@ -408,18 +396,17 @@ class _AppointmentCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            if (timeLabel.isNotEmpty)
-              Row(
-                children: [
-                  Icon(Icons.calendar_month_outlined,
-                      size: 18, color: Colors.grey.shade600),
-                  const SizedBox(width: 8),
-                  Text(
-                    timeLabel,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
+            Row(
+              children: [
+                Icon(Icons.calendar_month_outlined,
+                    size: 18, color: Colors.grey.shade600),
+                const SizedBox(width: 8),
+                Text(
+                  timeLabel,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -565,20 +552,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CustomerAppointment {
-  final DocumentReference<Map<String, dynamic>> reference;
-  final DocumentReference<Map<String, dynamic>>? parentBusinessRef;
-  final Map<String, dynamic> data;
-  final DateTime? startAt;
-  final DateTime? endAt;
-
-  _CustomerAppointment({
-    required this.reference,
-    required this.parentBusinessRef,
-    required this.data,
-    required this.startAt,
-    required this.endAt,
-  });
 }

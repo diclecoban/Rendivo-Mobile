@@ -1,10 +1,9 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
-import '../core/utils/auth_error_mapper.dart';
 import '../core/utils/validators.dart';
-import '../services/firebase_service.dart';
+import '../models/app_models.dart';
+import '../services/auth_service.dart';
 import 'customer_dashboard_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_of_service_screen.dart';
@@ -47,7 +46,6 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
       case PasswordStrength.medium:
         return 'Average password';
       case PasswordStrength.weak:
-      default:
         return 'Weak password';
     }
   }
@@ -59,7 +57,6 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
       case PasswordStrength.medium:
         return Colors.orange;
       case PasswordStrength.weak:
-      default:
         return Colors.red;
     }
   }
@@ -95,7 +92,7 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
       final phone = _phoneController.text.trim();
       final password = _passwordController.text;
 
-      await FirebaseService.registerCustomer(
+      await AuthService.registerCustomer(
         firstName: firstName,
         lastName: lastName.isEmpty ? null : lastName,
         email: email,
@@ -116,16 +113,16 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
         ),
         (route) => false,
       );
-    } on FirebaseAuthException catch (e) {
-      final message = mapAuthErrorMessage(e.code, isSignUp: true);
+    } on AppException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(content: Text(e.message)),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Signup error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'We could not complete your registration. Please try again in a moment.',
+            'Sign-up failed: $e',
           ),
         ),
       );

@@ -48,7 +48,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               ),
               _SectionTitle('5. Security'),
               _SectionBody(
-                'We rely on Firebase security standards and follow best practices to keep your information safe.',
+                'We rely on encrypted databases and industry best practices to keep your information safe.',
               ),
             ],
           ),

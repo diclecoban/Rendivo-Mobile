@@ -1,21 +1,26 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
 import 'customer_booking_screen.dart';
 
 class CustomerDiscoverScreen extends StatefulWidget {
   const CustomerDiscoverScreen({super.key});
 
   @override
-  State<CustomerDiscoverScreen> createState() => _CustomerDiscoverScreenState();
+  State<CustomerDiscoverScreen> createState() =>
+      _CustomerDiscoverScreenState();
 }
 
 class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
   final _searchController = TextEditingController();
+  final _backend = BackendService.instance;
+
   bool _isLoading = true;
   String? _error;
   String _selectedCategory = 'All';
+
   final List<String> _categories = const [
     'All',
     'Hair & Beauty',
@@ -23,8 +28,9 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
     'Nails',
     'Makeup'
   ];
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _businesses = [];
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _filteredBusinesses = [];
+
+  List<Business> _businesses = [];
+  List<Business> _filteredBusinesses = [];
 
   @override
   void initState() {
@@ -47,12 +53,11 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
         _error = null;
       });
 
-      final snapshot =
-          await FirebaseFirestore.instance.collection('businesses').get();
+      final snapshot = await _backend.fetchBusinesses();
 
       setState(() {
-        _businesses = snapshot.docs;
-        _filteredBusinesses = snapshot.docs;
+        _businesses = snapshot;
+        _filteredBusinesses = snapshot;
         _isLoading = false;
       });
     } catch (e) {
@@ -67,24 +72,21 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
     final query = _searchController.text.toLowerCase().trim();
 
     setState(() {
-      _filteredBusinesses = _businesses.where((doc) {
-        final data = doc.data();
-        final businessName =
-            (data['businessName'] as String? ?? '').toLowerCase();
-        final city =
-            ((data['address']?['city']) as String? ?? '').toLowerCase();
-        final tags = (data['services'] as List<dynamic>?)
-                ?.map((item) => (item['name'] as String?)?.toLowerCase() ?? '')
-                .join(' ') ??
-            '';
-        final type = (data['businessType'] as String? ?? '').toLowerCase();
+      _filteredBusinesses = _businesses.where((business) {
+        final name = business.businessName.toLowerCase();
+        final city = business.address.city.toLowerCase();
+        final tags = business.services
+            .map((service) => service.name.toLowerCase())
+            .join(' ');
+        final type = business.businessType.toLowerCase();
 
         final matchesQuery = query.isEmpty ||
-            businessName.contains(query) ||
+            name.contains(query) ||
             city.contains(query) ||
             tags.contains(query);
-        final matchesCategory = _selectedCategory == 'All' ||
-            type.contains(_selectedCategory.toLowerCase());
+        final matchesCategory =
+            _selectedCategory == 'All' ||
+                type.contains(_selectedCategory.toLowerCase());
 
         return matchesQuery && matchesCategory;
       }).toList();
@@ -183,7 +185,7 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
                       labelStyle: TextStyle(
                         fontSize: 12,
                         fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        isSelected ? FontWeight.w600 : FontWeight.w500,
                         color: isSelected ? primaryPink : Colors.black87,
                       ),
                       side: BorderSide(
@@ -208,9 +210,9 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  const Text(
                     'Nearby Businesses',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -246,37 +248,15 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
                   ),
                 )
               else
-                ..._filteredBusinesses.map((doc) {
-                  final data = doc.data();
-                  final address =
-                      (data['address'] as Map<String, dynamic>?) ?? {};
-                  final services =
-                      (data['services'] as List<dynamic>?) ?? const [];
-
+                ..._filteredBusinesses.map((business) {
                   return _BusinessCard(
-                    name: data['businessName'] ?? 'Business',
-                    type: data['businessType'] ?? '',
-                    location: [
-                      address['street'],
-                      address['city'],
-                      address['state']
-                    ]
-                        .whereType<String>()
-                        .where((value) => value.isNotEmpty)
-                        .join(', '),
-                    phone: data['phone'] ?? '',
-                    services: services
-                        .map((item) => item['name'] as String?)
-                        .whereType<String>()
-                        .toList(),
+                    business: business,
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => CustomerBookingScreen(
-                            businessDocId: doc.id,
-                            businessData: data,
-                          ),
+                          builder: (_) =>
+                              CustomerBookingScreen(business: business),
                         ),
                       );
                     },
@@ -291,24 +271,22 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
 }
 
 class _BusinessCard extends StatelessWidget {
-  final String name;
-  final String type;
-  final String location;
-  final String phone;
-  final List<String> services;
+  final Business business;
   final VoidCallback onTap;
 
   const _BusinessCard({
-    required this.name,
-    required this.type,
-    required this.location,
-    required this.phone,
-    required this.services,
+    required this.business,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final addressParts = [
+      business.address.street,
+      business.address.city,
+      business.address.state,
+    ].where((value) => value.isNotEmpty).join(', ');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -327,20 +305,20 @@ class _BusinessCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            name,
+            business.businessName,
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
-          if (type.isNotEmpty) ...[
+          if (business.businessType.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              type,
+              business.businessType,
               style: const TextStyle(fontSize: 13, color: Colors.grey),
             ),
           ],
-          if (location.isNotEmpty) ...[
+          if (addressParts.isNotEmpty) ...[
             const SizedBox(height: 12),
             Row(
               children: [
@@ -349,14 +327,14 @@ class _BusinessCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    location,
+                    addressParts,
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
               ],
             ),
           ],
-          if (phone.isNotEmpty) ...[
+          if (business.phone.isNotEmpty) ...[
             const SizedBox(height: 6),
             Row(
               children: [
@@ -364,27 +342,27 @@ class _BusinessCard extends StatelessWidget {
                     size: 16, color: Colors.grey.shade600),
                 const SizedBox(width: 6),
                 Text(
-                  phone,
+                  business.phone,
                   style: const TextStyle(fontSize: 13),
                 ),
               ],
             ),
           ],
-          if (services.isNotEmpty) ...[
+          if (business.services.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: services.take(3).map((service) {
+              children: business.services.take(3).map((service) {
                 return Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF6E9F7),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    service,
+                    service.name,
                     style: const TextStyle(
                       fontSize: 11,
                       color: Color(0xFF6B4D6D),

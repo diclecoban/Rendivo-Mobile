@@ -1,20 +1,13 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'firebase_options.dart';
 import 'screens/login_screen.dart';
+import 'services/backend_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    // ignore: avoid_print
-    print('Firebase init error: $e');
+void main() {
+  const apiBase = String.fromEnvironment('API_BASE_URL');
+  if (apiBase.isNotEmpty) {
+    BackendService.instance.setBaseUrl(apiBase);
   }
-
   runApp(const MyApp());
 }
 
