@@ -1,16 +1,109 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_colors.dart';
 
-class StaffDashboardScreen extends StatelessWidget {
+import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
+import '../services/session_service.dart';
+import 'customer_appointments_screen.dart';
+
+class StaffDashboardScreen extends StatefulWidget {
   const StaffDashboardScreen({super.key});
 
   @override
+  State<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
+}
+
+class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
+  final _backend = BackendService.instance;
+  final _session = SessionService.instance;
+
+  List<Appointment> _appointments = [];
+  bool _loading = false;
+  String? _error;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppointments();
+  }
+
+  Future<void> _loadAppointments() async {
+    final hasToken =
+        _session.authToken != null && _session.authToken!.isNotEmpty;
+    if (!hasToken) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await _backend.fetchCustomerAppointments();
+      data.sort((a, b) => a.startAt.compareTo(b.startAt));
+      setState(() {
+        _appointments = data;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  String _greeting() {
+    final user = _session.currentUser;
+    if (user == null) return 'Welcome';
+    if (user.fullName.trim().isNotEmpty) {
+      final parts = user.fullName.trim().split(' ');
+      return 'Hello, ${parts.first}!';
+    }
+    return 'Hello, ${user.email}';
+  }
+
+  int get _upcomingCount {
+    final now = DateTime.now();
+    return _appointments
+        .where(
+          (a) =>
+              a.startAt.isAfter(now) &&
+              a.status.toLowerCase() != 'cancelled',
+        )
+        .length;
+  }
+
+  int get _todayCount {
+    final now = DateTime.now();
+    return _appointments
+        .where((a) =>
+            a.startAt.year == now.year &&
+            a.startAt.month == now.month &&
+            a.startAt.day == now.day)
+        .length;
+  }
+
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final suffix = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $suffix';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = _session.currentUser;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        currentIndex: 0,
+        currentIndex: _currentIndex,
         selectedItemColor: primaryPink,
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
@@ -32,155 +125,161 @@ class StaffDashboardScreen extends StatelessWidget {
             label: 'Settings',
           ),
         ],
-        // Şimdilik tıklamalar bir şey yapmıyor
-        onTap: (_) {},
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CustomerAppointmentsScreen(),
+              ),
+            );
+          }
+        },
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Üst: Selamlama + buton
-              Row(
-                children: [
-                  const Expanded(
+        child: RefreshIndicator(
+          onRefresh: _loadAppointments,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _greeting(),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Here's what's on your schedule.",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: primaryPink,
+                      child: Text(
+                        (user?.fullName.isNotEmpty ?? false)
+                            ? user!.fullName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _KpiCard(
+                        title: 'Today',
+                        mainValue: _loading ? '...' : _todayCount.toString(),
+                        trendText: 'Bookings today',
+                        trendColor: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _KpiCard(
+                        title: 'Upcoming',
+                        mainValue:
+                            _loading ? '...' : _upcomingCount.toString(),
+                        trendText: 'Future bookings',
+                        trendColor: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                const Text(
+                  'Upcoming Bookings',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_loading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(color: primaryPink),
+                    ),
+                  )
+                else if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  )
+                else if (_appointments.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      children: const [
                         Text(
-                          'Good morning,\nJessica!',
+                          'No bookings yet',
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         SizedBox(height: 4),
                         Text(
-                          "Here’s what’s on your schedule today.",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
+                          'New bookings will appear here once scheduled.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
                     ),
+                  )
+                else
+                  Column(
+                    children: _appointments
+                        .take(5)
+                        .map(
+                          (a) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _BookingCard(
+                              service: a.services.isNotEmpty
+                                  ? a.services.first.name
+                                  : a.businessName,
+                              time: _formatTime(a.startAt),
+                              client: a.customerName.isNotEmpty
+                                  ? a.customerName
+                                  : a.customerEmail,
+                              status: a.status,
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      // TODO: yeni booking oluştur
-                    },
-                    icon: const Icon(
-                      Icons.add,
-                      size: 18,
-                    ),
-                    label: const Text(
-                      'New\nBooking',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryPink,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      minimumSize: const Size(80, 44),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Tab switcher: Month / Week / Day (şimdilik statik)
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    _TabChip(label: 'Month', isSelected: false),
-                    _TabChip(label: 'Week', isSelected: false),
-                    _TabChip(label: 'Day', isSelected: true),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Tarih satırı
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Icon(Icons.chevron_left),
-                  Text(
-                    'October 24, 2024',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Icon(Icons.chevron_right),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Gün içi bloklar
-              _ScheduleCard(
-                title: 'Availability',
-                timeRange: '9:00 AM - 12:00 PM',
-                backgroundColor: const Color(0xFFE0FBF4),
-                accentColor: const Color(0xFF2AD0A4),
-              ),
-              const SizedBox(height: 10),
-              _ScheduleCard(
-                title: 'Appointment with Anna K.',
-                timeRange: '2:00 PM',
-                backgroundColor: const Color(0xFFFDE4EE),
-                accentColor: primaryPink,
-              ),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                'Upcoming Bookings',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              _BookingCard(
-                icon: Icons.content_cut,
-                service: 'Haircut & Styling',
-                time: '10:00 AM',
-                client: 'Maria Garcia',
-              ),
-              const SizedBox(height: 8),
-              _BookingCard(
-                icon: Icons.brush,
-                service: 'Balayage',
-                time: '11:30 AM',
-                client: 'Chloe Bennett',
-              ),
-              const SizedBox(height: 8),
-              _BookingCard(
-                icon: Icons.cut,
-                service: "Men's Trim",
-                time: '2:00 PM',
-                client: 'Alex Johnson',
-              ),
-
-              const SizedBox(height: 24),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -188,94 +287,59 @@ class StaffDashboardScreen extends StatelessWidget {
   }
 }
 
-// ─────────── Helper widgetlar ───────────
-
-class _TabChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-
-  const _TabChip({
-    required this.label,
-    required this.isSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 32,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.black : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.black,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ScheduleCard extends StatelessWidget {
+class _KpiCard extends StatelessWidget {
   final String title;
-  final String timeRange;
-  final Color backgroundColor;
-  final Color accentColor;
+  final String mainValue;
+  final String trendText;
+  final Color trendColor;
 
-  const _ScheduleCard({
+  const _KpiCard({
     required this.title,
-    required this.timeRange,
-    required this.backgroundColor,
-    required this.accentColor,
+    required this.mainValue,
+    required this.trendText,
+    required this.trendColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 3,
-            height: 40,
-            decoration: BoxDecoration(
-              color: accentColor,
-              borderRadius: BorderRadius.circular(4),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  timeRange,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 6),
+          Text(
+            mainValue,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            trendText,
+            style: TextStyle(
+              fontSize: 11,
+              color: trendColor,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -285,22 +349,29 @@ class _ScheduleCard extends StatelessWidget {
 }
 
 class _BookingCard extends StatelessWidget {
-  final IconData icon;
   final String service;
   final String time;
   final String client;
+  final String status;
 
   const _BookingCard({
-    required this.icon,
     required this.service,
     required this.time,
     required this.client,
+    required this.status,
   });
 
   @override
   Widget build(BuildContext context) {
+    final lower = status.toLowerCase();
+    final statusColor = lower == 'cancelled'
+        ? Colors.redAccent
+        : lower == 'pending'
+            ? Colors.orange
+            : Colors.green;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -321,8 +392,8 @@ class _BookingCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               color: primaryPink.withOpacity(0.12),
             ),
-            child: Icon(
-              icon,
+            child: const Icon(
+              Icons.event,
               size: 18,
               color: primaryPink,
             ),
@@ -341,7 +412,7 @@ class _BookingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$time – $client',
+                  '$time · $client',
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.grey,
@@ -350,10 +421,20 @@ class _BookingCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right,
-            size: 18,
-            color: Colors.grey,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
           ),
         ],
       ),

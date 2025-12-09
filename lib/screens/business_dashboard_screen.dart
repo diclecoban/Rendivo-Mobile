@@ -1,229 +1,251 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
 
-class BusinessDashboardScreen extends StatelessWidget {
+import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
+import '../services/session_service.dart';
+
+class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
 
   @override
+  State<BusinessDashboardScreen> createState() =>
+      _BusinessDashboardScreenState();
+}
+
+class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
+  final _backend = BackendService.instance;
+  final _session = SessionService.instance;
+
+  Business? _business;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBusiness();
+  }
+
+  Future<void> _loadBusiness() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final businesses = await _backend.fetchBusinesses();
+
+      // If user is logged in, try to pick business by email match; otherwise pick first.
+      final email = _session.currentEmail?.toLowerCase();
+      Business? match;
+      if (email != null) {
+        match = businesses
+            .where((b) => b.email.toLowerCase() == email)
+            .toList()
+            .cast<Business?>()
+            .firstOrNull;
+      }
+      match ??= businesses.isNotEmpty ? businesses.first : null;
+
+      setState(() {
+        _business = match;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  int get _serviceCount => _business?.services.length ?? 0;
+  int get _staffCount => _business?.staff.length ?? 0;
+
+  @override
   Widget build(BuildContext context) {
+    final user = _session.currentUser;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ÜST: Selamlama + ikon
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello, Radiant Salon!',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
+        child: RefreshIndicator(
+          onRefresh: _loadBusiness,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _business?.businessName.isNotEmpty == true
+                                ? 'Hello, ${_business!.businessName}!'
+                                : 'Hello${user != null ? ', ${user.fullName}' : ''}!',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Here's what's happening with your business.",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Here's what's happening with your business.",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_none_rounded),
-                  ),
-                  const CircleAvatar(
-                    radius: 18,
-                    backgroundColor: primaryPink,
-                    child: Icon(
-                      Icons.person_outline,
-                      color: Colors.white,
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.notifications_none_rounded),
                     ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // KPI kartları (ilk satır 2 tane)
-              Row(
-                children: [
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'Total Appointments Today',
-                      mainValue: '12',
-                      trendText: '+2% from yesterday',
-                      trendColor: Colors.green,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _KpiCard(
-                      title: 'New Clients This Week',
-                      mainValue: '8',
-                      trendText: '+5% from last week',
-                      trendColor: Colors.green,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // KPI kartı (Revenue)
-              _KpiCard(
-                title: 'Projected Revenue',
-                mainValue: r'$2,450',
-                trendText: '+15% from yesterday',
-                trendColor: Colors.green,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Upcoming Appointments
-              _SectionTitle('Upcoming Appointments'),
-              const SizedBox(height: 8),
-              _CardContainer(
-                child: Column(
-                  children: const [
-                    _AppointmentRow(
-                      avatarLabel: 'C',
-                      service: 'Haircut & Style – Chloe',
-                      client: 'Isabella Rossi',
-                      time: '9:00 AM',
-                    ),
-                    Divider(height: 16),
-                    _AppointmentRow(
-                      avatarLabel: 'A',
-                      service: 'Manicure – Alex',
-                      client: 'Sophia Chen',
-                      time: '10:30 AM',
-                    ),
-                    Divider(height: 16),
-                    _AppointmentRow(
-                      avatarLabel: 'J',
-                      service: 'Balayage – Jordan',
-                      client: 'Olivia Kim',
-                      time: '11:00 AM',
-                    ),
-                    Divider(height: 16),
-                    _AppointmentRow(
-                      avatarLabel: 'S',
-                      service: 'Facial – Sam',
-                      client: 'Ava Garcia',
-                      time: '1:00 PM',
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Staff Availability
-              _SectionTitle('Staff Availability'),
-              const SizedBox(height: 8),
-              Stack(
-                children: [
-                  _CardContainer(
-                    child: Column(
-                      children: const [
-                        _StaffAvailabilityRow(
-                          avatarLabel: 'C',
-                          name: 'Chloe',
-                          statusText: 'BUSY',
-                          statusColor: Colors.redAccent,
-                        ),
-                        SizedBox(height: 12),
-                        _StaffAvailabilityRow(
-                          avatarLabel: 'A',
-                          name: 'Alex',
-                          statusText: 'AVAILABLE',
-                          statusColor: Colors.green,
-                        ),
-                        SizedBox(height: 12),
-                        _StaffAvailabilityRow(
-                          avatarLabel: 'J',
-                          name: 'Jordan',
-                          statusText: 'ON BREAK',
-                          statusColor: Colors.orange,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: FloatingActionButton(
-                      mini: true,
-                      onPressed: () {
-                        // TODO: Yeni staff ekle
-                      },
+                    CircleAvatar(
+                      radius: 18,
                       backgroundColor: primaryPink,
-                      elevation: 1,
-                      child: const Icon(Icons.add),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Popular Services
-              _SectionTitle('Popular Services'),
-              const SizedBox(height: 8),
-              _CardContainer(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    _ServiceProgressRow(
-                      service: 'Haircut & Style',
-                      value: 0.45,
-                      percentageLabel: '45%',
-                    ),
-                    SizedBox(height: 12),
-                    _ServiceProgressRow(
-                      service: 'Balayage',
-                      value: 0.25,
-                      percentageLabel: '25%',
-                    ),
-                    SizedBox(height: 12),
-                    _ServiceProgressRow(
-                      service: 'Manicure',
-                      value: 0.20,
-                      percentageLabel: '20%',
-                    ),
-                    SizedBox(height: 12),
-                    _ServiceProgressRow(
-                      service: 'Facial',
-                      value: 0.10,
-                      percentageLabel: '10%',
+                      child: Text(
+                        (_business?.businessName.isNotEmpty ?? false)
+                            ? _business!.businessName[0].toUpperCase()
+                            : (user?.fullName.isNotEmpty ?? false)
+                                ? user!.fullName[0].toUpperCase()
+                                : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _KpiCard(
+                        title: 'Services',
+                        mainValue: _loading ? '...' : _serviceCount.toString(),
+                        trendText: 'Active services',
+                        trendColor: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _KpiCard(
+                        title: 'Staff',
+                        mainValue: _loading ? '...' : _staffCount.toString(),
+                        trendText: 'Team members',
+                        trendColor: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                _KpiCard(
+                  title: 'Contact',
+                  mainValue:
+                      _business?.phone.isNotEmpty == true ? _business!.phone : '-',
+                  trendText: _business?.email ?? '',
+                  trendColor: Colors.grey,
+                ),
+
+                const SizedBox(height: 16),
+
+                _SectionTitle('Services'),
+                const SizedBox(height: 8),
+                _CardContainer(
+                  child: _loading
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: CircularProgressIndicator(color: primaryPink),
+                          ),
+                        )
+                      : _error != null
+                          ? Text(
+                              _error!,
+                              style: const TextStyle(color: Colors.red),
+                            )
+                          : (_business?.services.isNotEmpty ?? false)
+                              ? Column(
+                                  children: _business!.services
+                                      .take(5)
+                                      .map(
+                                        (s) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 10),
+                                          child: _ServiceRow(service: s),
+                                        ),
+                                      )
+                                      .toList(),
+                                )
+                              : const Text(
+                                  'No services yet.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                ),
+
+                const SizedBox(height: 16),
+
+                _SectionTitle('Staff'),
+                const SizedBox(height: 8),
+                _CardContainer(
+                  child: _loading
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: CircularProgressIndicator(color: primaryPink),
+                          ),
+                        )
+                      : (_business?.staff.isNotEmpty ?? false)
+                          ? Column(
+                              children: _business!.staff
+                                  .take(5)
+                                  .map(
+                                    (m) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 10),
+                                      child: _StaffRow(member: m),
+                                    ),
+                                  )
+                                  .toList(),
+                            )
+                          : const Text(
+                              'No staff listed.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-
-// ───────────────── Helper Widgetlar ─────────────────
 
 class _KpiCard extends StatelessWidget {
   final String title;
@@ -317,32 +339,22 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _AppointmentRow extends StatelessWidget {
-  final String avatarLabel;
-  final String service;
-  final String client;
-  final String time;
+class _ServiceRow extends StatelessWidget {
+  final ServiceItem service;
 
-  const _AppointmentRow({
-    required this.avatarLabel,
-    required this.service,
-    required this.client,
-    required this.time,
-  });
+  const _ServiceRow({required this.service});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         CircleAvatar(
-          radius: 18,
-          backgroundColor: primaryPink.withOpacity(0.2),
-          child: Text(
-            avatarLabel,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: primaryPink,
-            ),
+          radius: 16,
+          backgroundColor: primaryPink.withOpacity(0.15),
+          child: const Icon(
+            Icons.content_cut,
+            size: 16,
+            color: primaryPink,
           ),
         ),
         const SizedBox(width: 12),
@@ -351,28 +363,17 @@ class _AppointmentRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                service,
+                service.name,
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 2),
               Text(
-                client,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey,
-                ),
+                '${service.durationMinutes} min · \$${service.price.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
-          ),
-        ),
-        Text(
-          time,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
           ),
         ),
       ],
@@ -380,18 +381,10 @@ class _AppointmentRow extends StatelessWidget {
   }
 }
 
-class _StaffAvailabilityRow extends StatelessWidget {
-  final String avatarLabel;
-  final String name;
-  final String statusText;
-  final Color statusColor;
+class _StaffRow extends StatelessWidget {
+  final StaffMember member;
 
-  const _StaffAvailabilityRow({
-    required this.avatarLabel,
-    required this.name,
-    required this.statusText,
-    required this.statusColor,
-  });
+  const _StaffRow({required this.member});
 
   @override
   Widget build(BuildContext context) {
@@ -401,32 +394,33 @@ class _StaffAvailabilityRow extends StatelessWidget {
           radius: 16,
           backgroundColor: primaryPink.withOpacity(0.15),
           child: Text(
-            avatarLabel,
+            member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
             style: const TextStyle(
-              fontWeight: FontWeight.w600,
               color: primaryPink,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            name,
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Text(
-            statusText,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: statusColor,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                member.name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                member.role,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -434,49 +428,6 @@ class _StaffAvailabilityRow extends StatelessWidget {
   }
 }
 
-class _ServiceProgressRow extends StatelessWidget {
-  final String service;
-  final double value;
-  final String percentageLabel;
-
-  const _ServiceProgressRow({
-    required this.service,
-    required this.value,
-    required this.percentageLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                service,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            Text(
-              percentageLabel,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 6,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: const AlwaysStoppedAnimation(primaryPink),
-          ),
-        ),
-      ],
-    );
-  }
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

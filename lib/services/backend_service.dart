@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../models/app_models.dart';
+import '../models/owner_signup.dart';
 import 'session_service.dart';
 
 class BackendService {
@@ -139,6 +140,39 @@ class BackendService {
         'email': email,
         'password': password,
         'phone': phone ?? '',
+      }),
+    );
+
+    return _handleResponse(response, (jsonBody) {
+      final token = jsonBody['token'] as String?;
+      final user = AuthUser.fromJson(
+        Map<String, dynamic>.from(jsonBody['user'] as Map),
+        token: token,
+      );
+      _session
+        ..setUser(user)
+        ..setToken(token);
+      return user;
+    });
+  }
+
+  Future<AuthUser> registerBusinessOwner(OwnerSignupModel model) async {
+    final uri = Uri.parse('$_baseUrl/auth/register-business');
+    final response = await _client.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'fullName': model.fullName,
+        'email': model.email,
+        'password': model.password,
+        'businessName': model.businessName,
+        'businessType': model.businessType,
+        'phone': model.phone,
+        'publicEmail': model.publicEmail,
+        'street': model.street,
+        'city': model.city,
+        'state': model.state,
+        'postalCode': model.postalCode,
       }),
     );
 

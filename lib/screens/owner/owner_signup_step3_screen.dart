@@ -1,25 +1,83 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
 
-class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
+import '../../core/theme/app_colors.dart';
+import '../../models/owner_signup.dart';
+import '../../services/backend_service.dart';
+import '../business_dashboard_screen.dart';
+
+class BusinessOwnerSignUpStep3Screen extends StatefulWidget {
   const BusinessOwnerSignUpStep3Screen({super.key});
 
   @override
+  State<BusinessOwnerSignUpStep3Screen> createState() =>
+      _BusinessOwnerSignUpStep3ScreenState();
+}
+
+class _BusinessOwnerSignUpStep3ScreenState
+    extends State<BusinessOwnerSignUpStep3Screen> {
+  final _model = OwnerSignupModel.instance;
+  final _backend = BackendService.instance;
+
+  bool _submitting = false;
+  String? _error;
+
+  Future<void> _submit(BuildContext context) async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    try {
+      final user = await _backend.registerBusinessOwner(_model);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Welcome, ${user.fullName}!'),
+        ),
+      );
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const BusinessDashboardScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final businessName =
+        _model.businessName.isNotEmpty ? _model.businessName : 'your business';
+    final category =
+        _model.businessType.isNotEmpty ? _model.businessType : 'Category TBD';
+    final contact = _model.publicEmail.isNotEmpty
+        ? _model.publicEmail
+        : _model.email;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDF7FF),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Üst: Rendivo + profil ikonu
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'Rendivo',
                       style: TextStyle(
                         fontSize: 18,
@@ -29,10 +87,14 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: primaryPink,
-                      child: Icon(
-                        Icons.person_outline,
-                        size: 18,
-                        color: Colors.white,
+                      child: Text(
+                        _model.fullName.isNotEmpty
+                            ? _model.fullName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -64,7 +126,6 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
 
                 const SizedBox(height: 32),
 
-                // Check icon
                 Container(
                   width: 80,
                   height: 80,
@@ -90,9 +151,9 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  "Welcome to Rendivo, The Chic Salon!\nYou're ready to start managing your appointments.",
-                  style: TextStyle(
+                Text(
+                  "Welcome to Rendivo, $businessName!\nYou're ready to start managing your appointments.",
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
                     height: 1.4,
@@ -102,7 +163,6 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // Summary card
                 Container(
                   width: double.infinity,
                   padding:
@@ -120,35 +180,55 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'Business Details Summary',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 8),
-                      Text(
+                      const SizedBox(height: 8),
+                      const Text(
                         "Here's the information we have on file for your business.",
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey,
                         ),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text(
-                        'Business Name: The Chic Salon',
-                        style: TextStyle(fontSize: 12),
+                        'Business Name: $businessName',
+                        style: const TextStyle(fontSize: 12),
                       ),
                       Text(
-                        'Category: Beauty & Wellness',
-                        style: TextStyle(fontSize: 12),
+                        'Category: $category',
+                        style: const TextStyle(fontSize: 12),
                       ),
                       Text(
-                        'Contact: contact@chicsalon.com',
-                        style: TextStyle(fontSize: 12),
+                        'Contact: $contact',
+                        style: const TextStyle(fontSize: 12),
                       ),
+                      if (_model.phone.isNotEmpty)
+                        Text(
+                          'Phone: ${_model.phone}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      if (_model.street.isNotEmpty ||
+                          _model.city.isNotEmpty ||
+                          _model.state.isNotEmpty ||
+                          _model.postalCode.isNotEmpty)
+                        Text(
+                          'Address: ${_model.street}, ${_model.city} ${_model.state} ${_model.postalCode}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -168,16 +248,14 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // Add first service card
-                _NextActionCard(
+                const _NextActionCard(
                   icon: Icons.brush,
                   title: 'Add Your First Service',
                 ),
 
                 const SizedBox(height: 12),
 
-                // Invite team card
-                _NextActionCard(
+                const _NextActionCard(
                   icon: Icons.group_outlined,
                   title: 'Invite Your Team',
                 ),
@@ -188,30 +266,32 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Business onboarding will be re-enabled after integrating the new API.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: _submitting ? null : () => _submit(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryPink,
+                      disabledBackgroundColor: primaryPink.withOpacity(0.6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'Go to Your Dashboard',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Create My Business',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
 
@@ -219,7 +299,7 @@ class BusinessOwnerSignUpStep3Screen extends StatelessWidget {
 
                 GestureDetector(
                   onTap: () {
-                    Navigator.pop(context); // Step2'ye geri
+                    Navigator.pop(context);
                   },
                   child: const Text(
                     'Go back and edit details',

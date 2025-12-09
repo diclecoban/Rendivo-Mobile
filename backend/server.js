@@ -104,6 +104,162 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+app.post('/api/auth/register-business', async (req, res) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const {
+      fullName,
+      email,
+      password,
+      businessName,
+      businessType = '',
+      phone = '',
+      publicEmail = '',
+      street = '',
+      city = '',
+      state = '',
+      postalCode = '',
+      description = '',
+      country = '',
+      website = '',
+      // logo istersen body'den gelebilir
+      logo = '',
+    } = req.body;
+
+    // Zorunlu alan kontrolü
+    if (!fullName || !email || !password || !businessName) {
+      return res.status(400).json({
+        message: 'fullName, email, password, businessName are required',
+      });
+    }
+
+    // Email zaten kayıtlı mı?
+    const [existing] = await connection.query(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({ message: 'Email already registered' });
+    }
+
+    await connection.beginTransaction();
+
+    // Şifreyi hashle
+    const hashed = await bcrypt.hash(password, 10);
+
+    // fullName'i firstName / lastName'e kaba şekilde ayır
+    const nameParts = fullName.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // 1) USERS tablosuna owner user ekle
+    const [userResult] = await connection.execute(
+      `INSERT INTO users
+        (email, password, firstName, lastName, fullName, phone, role, authProvider, emailVerified, isActive, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, 'business_owner', 'local', 0, 1, NOW(), NOW())`,
+      [email, hashed, firstName, lastName, fullName, phone]
+    );
+
+    const ownerId = userResult.insertId;
+
+    // 2) Business için benzersiz businessId üret (public ID gibi)
+    const businessId = `BIZ-${ownerId}-${Date.now()}`;
+
+    // 3) BUSINESSES tablosuna ekle
+    // Kolon sırası şemanla uyumlu:
+    // id, ownerId, businessName, businessType, description,
+    // address, city, state, zipCode, country,
+    // phone, email, website, logo, businessId,
+    // isActive, createdAt, updatedAt
+    const [businessResult] = await connection.execute(
+      `INSERT INTO businesses
+        (ownerId, businessName, businessType, description,
+         address, city, state, zipCode, country,
+         phone, email, website, logo, businessId,
+         isActive, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+      [
+        ownerId,
+        businessName,
+        businessType,
+        description,
+        street,
+        city,
+        state,
+        postalCode,
+        country,
+        phone,
+        publicEmail || email,
+        website,
+        logo,
+        businessId,
+      ]
+    );
+
+    const createdBusinessId = businessResult.insertId;
+
+    // 4) Owner'ı staff_members tablosuna da kaydet (opsiyonel ama mantıklı)
+    // staff_members:
+    // id, userId, businessId, position, isActive, joinedAt, createdAt, updatedAt
+    await connection.execute(
+      `INSERT INTO staff_members
+        (userId, businessId, position, isActive, joinedAt, createdAt, updatedAt)
+       VALUES (?, ?, ?, 1, NOW(), NOW(), NOW())`,
+      [ownerId, createdBusinessId, 'Owner']
+    );
+
+    await connection.commit();
+
+    // JWT token
+    const token = jwt.sign(
+      { id: ownerId, email, role: 'business_owner' },
+      JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: ownerId,
+        email,
+        fullName,
+        firstName,
+        lastName,
+        phone,
+        role: 'business_owner',
+      },
+      business: {
+        id: createdBusinessId,
+        ownerId,
+        businessId,
+        businessName,
+        businessType,
+        description,
+        address: street,
+        city,
+        state,
+        zipCode: postalCode,
+        country,
+        phone,
+        email: publicEmail || email,
+        website,
+        logo,
+        isActive: 1,
+      },
+    });
+  } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (_) {}
+    console.error(err);
+    res.status(500).json({ message: 'Business registration failed' });
+  } finally {
+    connection.release();
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;

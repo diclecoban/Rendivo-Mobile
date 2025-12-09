@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../models/owner_signup.dart';
-import 'owner_signup_step3_screen.dart';
 import 'helper.dart';
+import 'owner_signup_step3_screen.dart';
 
 class BusinessOwnerSignUpStep2Screen extends StatefulWidget {
   const BusinessOwnerSignUpStep2Screen({super.key});
@@ -14,6 +15,17 @@ class BusinessOwnerSignUpStep2Screen extends StatefulWidget {
 
 class _BusinessOwnerSignUpStep2ScreenState
     extends State<BusinessOwnerSignUpStep2Screen> {
+  static const _businessTypes = [
+    'Salon & Beauty',
+    'Barber',
+    'Spa & Wellness',
+    'Nail Salon',
+    'Massage Therapy',
+    'Medical Aesthetics',
+    'Fitness/Personal Training',
+    'Other',
+  ];
+
   final _businessNameController = TextEditingController();
   final _businessTypeController = TextEditingController();
   final _streetController = TextEditingController();
@@ -87,7 +99,6 @@ class _BusinessOwnerSignUpStep2ScreenState
 
                 const SizedBox(height: 24),
 
-                // Business Name
                 const _OwnerFieldLabel('Business Name'),
                 const SizedBox(height: 8),
                 buildOwnerTextField(
@@ -97,7 +108,6 @@ class _BusinessOwnerSignUpStep2ScreenState
 
                 const SizedBox(height: 16),
 
-                // Business Type
                 const _OwnerFieldLabel('Business Type'),
                 const SizedBox(height: 8),
                 TextField(
@@ -127,13 +137,12 @@ class _BusinessOwnerSignUpStep2ScreenState
                     suffixIcon: const Icon(Icons.keyboard_arrow_down),
                   ),
                   onTap: () {
-                    // TODO: Dropdown aç (bottom sheet vs.)
+                    _showBusinessTypePicker(context);
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Business Address
                 const _OwnerFieldLabel('Business Address'),
                 const SizedBox(height: 8),
                 buildOwnerTextField(
@@ -186,7 +195,6 @@ class _BusinessOwnerSignUpStep2ScreenState
 
                 const SizedBox(height: 16),
 
-                // Contact Information
                 const _OwnerFieldLabel('Contact Information'),
                 const SizedBox(height: 8),
 
@@ -210,7 +218,6 @@ class _BusinessOwnerSignUpStep2ScreenState
 
                 const SizedBox(height: 16),
 
-                // Business logo
                 const _OwnerFieldLabel('Business Logo (Optional)'),
                 const SizedBox(height: 8),
                 Container(
@@ -223,8 +230,6 @@ class _BusinessOwnerSignUpStep2ScreenState
                       style: BorderStyle.solid,
                     ),
                     color: Colors.white,
-                    // Noktalı sınır efekti için:
-                    // henüz gerçek dashed border yok, bu görsel açıdan benzeri
                   ),
                   child: Column(
                     children: const [
@@ -252,7 +257,6 @@ class _BusinessOwnerSignUpStep2ScreenState
 
                 const SizedBox(height: 24),
 
-                // Back & Continue
                 Row(
                   children: [
                     TextButton(
@@ -316,6 +320,34 @@ class _BusinessOwnerSignUpStep2ScreenState
           ),
         ),
       ),
+    );
+  }
+
+  void _showBusinessTypePicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _businessTypes.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final type = _businessTypes[index];
+              return ListTile(
+                title: Text(type),
+                onTap: () {
+                  _businessTypeController.text = type;
+                  Navigator.pop(ctx);
+                },
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
