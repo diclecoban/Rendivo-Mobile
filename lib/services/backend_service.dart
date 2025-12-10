@@ -238,6 +238,37 @@ class BackendService {
     });
   }
 
+  Future<List<AvailabilitySlot>> fetchBusinessAvailability({
+    required String businessId,
+    required DateTime date,
+    int? durationMinutes,
+  }) async {
+    final params = <String, String>{
+      'date': _formatDate(date),
+    };
+    if (durationMinutes != null && durationMinutes > 0) {
+      params['durationMinutes'] = '$durationMinutes';
+    }
+
+    final uri = Uri.parse('$_baseUrl/businesses/$businessId/availability')
+        .replace(queryParameters: params);
+    final response = await _client.get(uri, headers: _headers());
+
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! Map) return <AvailabilitySlot>[];
+      final slots = jsonBody['slots'];
+      if (slots is! List) return <AvailabilitySlot>[];
+      return slots
+          .whereType<Map>()
+          .map(
+            (item) => AvailabilitySlot.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    });
+  }
+
   Future<String> createAppointment({
     required String businessId,
     required List<String> serviceIds,
@@ -305,5 +336,12 @@ class BackendService {
       body: jsonEncode({'notes': notes}),
     );
     _handleResponse(response, (_) => null);
+  }
+
+  String _formatDate(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 }

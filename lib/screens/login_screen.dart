@@ -215,10 +215,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
-                          validator: (value) => validatePassword(
-                            value ?? '',
-                            requireComplexity: false,
-                          ),
+                          validator: (value) {
+                            if ((value ?? '').isEmpty) {
+                              return 'Please enter your password.';
+                            }
+                            // TODO: Re-enable the 8-character requirement once backend enforces it again.
+                            return null;
+                          },
                           decoration: InputDecoration(
                             hintText: 'Enter your password',
                             contentPadding: const EdgeInsets.symmetric(

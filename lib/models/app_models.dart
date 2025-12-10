@@ -293,6 +293,38 @@ class Appointment {
   }
 }
 
+class AvailabilitySlot {
+  final DateTime startAt;
+  final DateTime endAt;
+
+  const AvailabilitySlot({
+    required this.startAt,
+    required this.endAt,
+  });
+
+  factory AvailabilitySlot.fromJson(Map<String, dynamic> json) {
+    final startStr = json['startAt']?.toString();
+    final endStr = json['endAt']?.toString();
+    final fallback = DateTime.now();
+    return AvailabilitySlot(
+      startAt: startStr != null ? DateTime.parse(startStr) : fallback,
+      endAt: endStr != null ? DateTime.parse(endStr) : fallback,
+    );
+  }
+
+  String label() {
+    String format(DateTime time) {
+      final local = time.toLocal();
+      final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = local.minute.toString().padLeft(2, '0');
+      final suffix = local.hour >= 12 ? 'PM' : 'AM';
+      return '$hour:$minute $suffix';
+    }
+
+    return '${format(startAt)} - ${format(endAt)}';
+  }
+}
+
 class AppException implements Exception {
   final String message;
   const AppException(this.message);

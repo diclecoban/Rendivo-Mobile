@@ -1,10 +1,11 @@
 ### Rendivo Backend (Express + MySQL)
 
-1) Copy `.env.example` to `.env` and adjust values if needed.  
-2) Install dependencies: `npm install`.  
-3) Start the API: `npm start` (or `npm run dev` with nodemon).  
+1. Copy `.env.example` to `.env` and adjust values if needed.
+2. Install dependencies: `npm install`.
+3. Start the API: `npm start` (or `npm run dev` with nodemon).
 
 Key endpoints:
+
 - `POST /api/auth/register` — create a customer account.
 - `POST /api/auth/login` — sign in and receive a JWT.
 - `GET /api/businesses` — list active businesses.

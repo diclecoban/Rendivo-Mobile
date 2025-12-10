@@ -9,6 +9,9 @@ const mysql = require('mysql2/promise');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
+const BUSINESS_DAY_START = process.env.BUSINESS_DAY_START || '09:00';
+const BUSINESS_DAY_END = process.env.BUSINESS_DAY_END || '18:00';
+const DEFAULT_SLOT_MINUTES = Number(process.env.DEFAULT_SLOT_MINUTES || 30);
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -365,6 +368,215 @@ app.get('/api/businesses/:id/services', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Could not load services' });
+  }
+});
+
+function parseTimeToMinutes(value) {
+  if (!value) return null;
+  const parts = value.split(':').map((part) => Number(part));
+  if (parts.length < 2 || parts.some((n) => Number.isNaN(n))) return null;
+  const [hours, minutes] = parts;
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(value) {
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  const pad = (num) => num.toString().padStart(2, '0');
+  return `${pad(hours)}:${pad(minutes)}:00`;
+}
+
+app.get('/api/businesses/:id/availability', async (req, res) => {
+  try {
+    const businessId = Number(req.params.id);
+    if (Number.isNaN(businessId)) {
+      return res.status(400).json({ message: 'Invalid business id' });
+    }
+
+    const dateStr =
+      typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : new Date().toISOString().slice(0, 10);
+
+    const requestedDuration = Number(req.query.durationMinutes);
+    const durationMinutes =
+      Number.isFinite(requestedDuration) && requestedDuration > 0
+        ? requestedDuration
+        : DEFAULT_SLOT_MINUTES;
+
+    const slotMinutesParam = Number(req.query.slotMinutes);
+    const slotMinutes =
+      Number.isFinite(slotMinutesParam) && slotMinutesParam > 0
+        ? slotMinutesParam
+        : DEFAULT_SLOT_MINUTES;
+
+    const dayStartMinutes = parseTimeToMinutes(BUSINESS_DAY_START);
+    const dayEndMinutes = parseTimeToMinutes(BUSINESS_DAY_END);
+    if (
+      dayStartMinutes === null ||
+      dayEndMinutes === null ||
+      dayEndMinutes <= dayStartMinutes
+    ) {
+      return res.status(500).json({ message: 'Invalid business hours configuration' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT startTime, endTime
+         FROM appointments
+        WHERE businessId = ?
+          AND appointmentDate = ?
+          AND status <> 'cancelled'`,
+      [businessId, dateStr]
+    );
+
+    const busyBlocks = rows.map((row) => {
+      const start = parseTimeToMinutes(row.startTime);
+      const end = parseTimeToMinutes(row.endTime);
+      return {
+        start,
+        end,
+      };
+    });
+
+    function overlaps(start, end) {
+      return busyBlocks.some((block) => {
+        if (block.start === null || block.end === null) return false;
+        return start < block.end && end > block.start;
+      });
+    }
+
+    const slots = [];
+    for (
+      let cursor = dayStartMinutes;
+      cursor + durationMinutes <= dayEndMinutes;
+      cursor += slotMinutes
+    ) {
+      const slotEnd = cursor + durationMinutes;
+      if (!overlaps(cursor, slotEnd)) {
+        const startIso = `${dateStr}T${minutesToTime(cursor)}`;
+        const endIso = `${dateStr}T${minutesToTime(slotEnd)}`;
+        slots.push({
+          startAt: startIso,
+          endAt: endIso,
+        });
+      }
+    }
+
+    res.json({
+      date: dateStr,
+      slotMinutes,
+      durationMinutes,
+      slots,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Could not load availability' });
+  }
+});
+
+app.get('/api/customer/dashboard', authMiddleware, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+
+    const [
+      [totalRows],
+      [upcomingRows],
+      [nextRows],
+    ] = await Promise.all([
+      pool.query(
+        'SELECT COUNT(*) AS total FROM appointments WHERE customerId = ?',
+        [customerId]
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS upcoming
+         FROM appointments
+         WHERE customerId = ?
+           AND status <> 'cancelled'
+           AND CONCAT(appointmentDate, ' ', startTime) >= NOW()`,
+        [customerId]
+      ),
+      pool.query(
+        `SELECT 
+           a.id,
+           a.businessId,
+           b.businessName,
+           a.appointmentDate,
+           a.startTime,
+           a.endTime,
+           a.status,
+           JSON_ARRAYAGG(
+             CASE 
+               WHEN sv.id IS NULL THEN NULL
+               ELSE JSON_OBJECT(
+                 'id', sv.id,
+                 'name', sv.name
+               )
+             END
+           ) AS servicesJson
+         FROM appointments a
+         LEFT JOIN businesses b ON a.businessId = b.id
+         LEFT JOIN appointment_services aps ON aps.appointmentId = a.id
+         LEFT JOIN services sv ON sv.id = aps.serviceId
+         WHERE a.customerId = ?
+           AND a.status <> 'cancelled'
+           AND CONCAT(a.appointmentDate, ' ', a.startTime) >= NOW()
+         GROUP BY a.id
+         ORDER BY a.appointmentDate ASC, a.startTime ASC
+         LIMIT 1`,
+        [customerId]
+      ),
+    ]);
+
+    const totalBookings = totalRows.length ? Number(totalRows[0].total) : 0;
+    const upcomingCount = upcomingRows.length ? Number(upcomingRows[0].upcoming) : 0;
+
+    let nextAppointment = null;
+    if (nextRows.length) {
+      const row = nextRows[0];
+      let services = [];
+      try {
+        const raw = row.servicesJson;
+        if (raw) {
+          const parsed = Array.isArray(raw)
+            ? raw
+            : JSON.parse(typeof raw === 'string' ? raw : raw.toString());
+          services = Array.isArray(parsed)
+            ? parsed.filter((item) => item !== null)
+            : [];
+        }
+      } catch (_) {
+        services = [];
+      }
+
+      const firstServiceName = services.find((svc) => svc && svc.name)?.name;
+      const title = firstServiceName || row.businessName || 'Upcoming appointment';
+
+      const toIsoString = (dateStr, timeStr) => {
+        if (!dateStr || !timeStr) return null;
+        const isoCandidate = `${dateStr}T${timeStr}`;
+        const parsed = new Date(isoCandidate);
+        return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      };
+
+      nextAppointment = {
+        id: row.id,
+        businessId: row.businessId,
+        businessName: row.businessName,
+        title,
+        status: row.status,
+        startAt: toIsoString(row.appointmentDate, row.startTime),
+        endAt: toIsoString(row.appointmentDate, row.endTime),
+      };
+    }
+
+    res.json({
+      totalBookings,
+      upcomingCount,
+      nextAppointment,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Could not load customer dashboard' });
   }
 });
 
