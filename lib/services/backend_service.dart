@@ -207,6 +207,93 @@ class BackendService {
     });
   }
 
+  // Owner service management
+  Future<List<ServiceItem>> fetchOwnerServices() async {
+    final uri = Uri.parse('$_baseUrl/services');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <ServiceItem>[];
+      return jsonBody
+          .map((item) => ServiceItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<ServiceItem> createService({
+    required String name,
+    String description = '',
+    required double price,
+    required int durationMinutes,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/services');
+    final response = await _client.post(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'name': name,
+        'description': description,
+        'price': price,
+        'duration': durationMinutes,
+      }),
+    );
+
+    return _handleResponse(
+      response,
+      (jsonBody) => ServiceItem.fromJson(
+        Map<String, dynamic>.from(jsonBody['service'] ?? jsonBody),
+      ),
+    );
+  }
+
+  Future<ServiceItem> updateService({
+    required String id,
+    required String name,
+    String description = '',
+    required double price,
+    required int durationMinutes,
+    bool? isActive,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/services/$id');
+    final response = await _client.put(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'name': name,
+        'description': description,
+        'price': price,
+        'duration': durationMinutes,
+        if (isActive != null) 'isActive': isActive,
+      }),
+    );
+
+    return _handleResponse(
+      response,
+      (jsonBody) => ServiceItem.fromJson(
+        Map<String, dynamic>.from(jsonBody['service'] ?? jsonBody),
+      ),
+    );
+  }
+
+  Future<void> deleteService(String id) async {
+    final uri = Uri.parse('$_baseUrl/services/$id');
+    final response =
+        await _client.delete(uri, headers: _headers(withAuth: true));
+    _handleResponse(response, (_) => null);
+  }
+
+  // Staff
+  Future<List<StaffMember>> fetchBusinessStaff(String businessId) async {
+    final uri = Uri.parse('$_baseUrl/businesses/$businessId/staff');
+    final response = await _client.get(uri, headers: _headers());
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <StaffMember>[];
+      return jsonBody
+          .map((item) => StaffMember.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
   // Appointments
   Future<List<Appointment>> fetchCustomerAppointments() {
     return fetchAppointments();
@@ -240,6 +327,17 @@ class BackendService {
     String? staffId,
     String? notes,
   }) async {
+    var resolvedStaffId = staffId;
+    if (resolvedStaffId == null || resolvedStaffId.isEmpty) {
+      final staff = await fetchBusinessStaff(businessId);
+      if (staff.isEmpty) {
+        throw const AppException(
+          'No staff available for this business. Please contact the business.',
+        );
+      }
+      resolvedStaffId = staff.first.id;
+    }
+
     final uri = Uri.parse('$_baseUrl/appointments');
     final response = await _client.post(
       uri,
@@ -247,7 +345,8 @@ class BackendService {
       body: jsonEncode({
         'businessId': int.tryParse(businessId) ?? businessId,
         'serviceIds': serviceIds.map((id) => int.tryParse(id) ?? id).toList(),
-        'staffId': staffId != null ? int.tryParse(staffId) ?? staffId : null,
+        'staffId':
+            resolvedStaffId != null ? int.tryParse(resolvedStaffId) ?? resolvedStaffId : null,
         'appointmentDate': _formatDate(startAt),
         'startTime': _formatTime(startAt),
         'endTime': _formatTime(endAt),

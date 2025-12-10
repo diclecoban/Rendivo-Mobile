@@ -15,15 +15,6 @@ class AppointmentService {
     StaffMember? staff,
     String? notes,
   }) async {
-    final totalPrice = services.fold<double>(
-      0,
-      (sum, item) => sum + item.price,
-    );
-    final totalDuration = services.fold<int>(
-      0,
-      (sum, item) => sum + item.durationMinutes,
-    );
-
     return _backend.createAppointment(
       businessId: business.id,
       serviceIds: services.map((s) => s.id).toList(),

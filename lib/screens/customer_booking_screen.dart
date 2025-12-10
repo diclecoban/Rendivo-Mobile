@@ -472,11 +472,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               ),
             ],
           )
-        else ...[
-          _buildAvailabilityTable(),
-          const SizedBox(height: 12),
+        else
           _buildTimeSlotsGrid(),
-        ],
       ],
     );
   }
@@ -550,6 +547,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               final inMonth = day.month == _focusedMonth.month;
               final dateKey = _formatDateKey(day);
               final isBooked = _bookedDays.contains(dateKey);
+              final hasAvailability = _availableSlotsForDay(day).isNotEmpty;
+              final isFullyBooked = isBooked && !hasAvailability;
               final isSelected =
                   inMonth &&
                   day.year == _selectedDate.year &&
@@ -560,7 +559,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               Color borderColor = Colors.grey.shade300;
               Color textColor = inMonth ? Colors.black : Colors.grey.shade400;
 
-              if (isBooked) {
+              if (isFullyBooked) {
                 bgColor = const Color(0xFFFFEFEF);
                 borderColor = Colors.redAccent.withOpacity(0.6);
                 textColor = Colors.redAccent;
@@ -572,7 +571,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
               return GestureDetector(
                 onTap: () async {
-                  if (!inMonth || isBooked) return;
+                  if (!inMonth || isFullyBooked) return;
                   final monthChanged = day.month != _focusedMonth.month;
                   setState(() {
                     _selectedDate = day;
@@ -633,96 +632,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     await _loadAvailabilityForMonth(newMonth);
   }
 
-  Widget _buildAvailabilityTable() {
-    final slots = _bookedSlotsForDate(_selectedDate);
-    if (slots.isEmpty) {
-      return const Text(
-        'No availability data for this day.',
-        style: TextStyle(fontSize: 12, color: Colors.grey),
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Booked slots',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Table(
-            columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(1)},
-            children: [
-              const TableRow(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Start',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'End',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              ...slots.map(
-                (slot) => TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Text(
-                        _formatTime(slot.startAt),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Text(
-                        _formatTime(slot.endAt),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTimeSlotsGrid() {
     final standardSlots = _standardSlotsForDay(_selectedDate);
-    if (standardSlots.isEmpty) {
-      return const Text(
-        'No available time slots for this day.',
-        style: TextStyle(fontSize: 12, color: Colors.grey),
-      );
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -731,6 +642,12 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
+        if (standardSlots.isEmpty)
+          const Text(
+            'No available time slots for this day.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          )
+        else
         Wrap(
           spacing: 8,
           runSpacing: 8,
