@@ -26,6 +26,7 @@ class BackendService {
   final http.Client _client;
   final SessionService _session = SessionService.instance;
   late String _baseUrl;
+  String get baseUrl => _baseUrl;
 
   static String _normalizeBase(String value) {
     var base = value.trim();
@@ -345,8 +346,9 @@ class BackendService {
       body: jsonEncode({
         'businessId': int.tryParse(businessId) ?? businessId,
         'serviceIds': serviceIds.map((id) => int.tryParse(id) ?? id).toList(),
-        'staffId':
-            resolvedStaffId != null ? int.tryParse(resolvedStaffId) ?? resolvedStaffId : null,
+        'staffId': resolvedStaffId != null
+            ? int.tryParse(resolvedStaffId) ?? resolvedStaffId
+            : null,
         'appointmentDate': _formatDate(startAt),
         'startTime': _formatTime(startAt),
         'endTime': _formatTime(endAt),

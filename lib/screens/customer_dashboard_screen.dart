@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../core/theme/app_colors.dart';
 import '../services/session_service.dart';
@@ -9,15 +6,15 @@ import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'customer_appointments_screen.dart';
 import 'customer_discover_screen.dart';
+import '../services/backend_service.dart';
 
-/// ✅ TODO: set this to your backend base URL
-const String kApiBaseUrl = 'https://YOUR_BACKEND_URL';
 
 class CustomerDashboardScreen extends StatefulWidget {
   const CustomerDashboardScreen({super.key});
 
   @override
-  State<CustomerDashboardScreen> createState() => _CustomerDashboardScreenState();
+  State<CustomerDashboardScreen> createState() =>
+      _CustomerDashboardScreenState();
 }
 
 class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
@@ -94,64 +91,6 @@ class _AppointmentLite {
   });
 }
 
-class _DashboardApi {
-  /// ✅ Expected backend response shape (adjust keys if your backend differs):
-  /// {
-  ///   "upcomingCount": 3,
-  ///   "totalBookings": 12,
-  ///   "nextAppointment": {
-  ///     "title": "Chic Haircut & Style",
-  ///     "startAt": "2025-10-20T10:30:00Z",
-  ///     "endAt": "2025-10-20T11:30:00Z"
-  ///   }
-  /// }
-  static Future<_DashboardData> fetchDashboard({
-    required String baseUrl,
-    required String token,
-  }) async {
-    final uri = Uri.parse('$baseUrl/customer/dashboard'); // ✅ change path if needed
-
-    final res = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      // Fail-safe: don't crash UI
-      return const _DashboardData.empty();
-    }
-
-    final map = jsonDecode(res.body) as Map<String, dynamic>;
-
-    final upcoming = (map['upcomingCount'] is num) ? (map['upcomingCount'] as num).toInt() : 0;
-    final total = (map['totalBookings'] is num) ? (map['totalBookings'] as num).toInt() : 0;
-
-    _AppointmentLite? next;
-    final nextMap = map['nextAppointment'];
-    if (nextMap is Map<String, dynamic>) {
-      final title = (nextMap['title'] as String?)?.trim() ?? '';
-      final startStr = (nextMap['startAt'] as String?)?.trim();
-      final endStr = (nextMap['endAt'] as String?)?.trim();
-
-      final startAt = startStr != null ? DateTime.tryParse(startStr) : null;
-      final endAt = endStr != null ? DateTime.tryParse(endStr) : null;
-
-      if (title.isNotEmpty && startAt != null && endAt != null) {
-        next = _AppointmentLite(title: title, startAt: startAt, endAt: endAt);
-      }
-    }
-
-    return _DashboardData(
-      upcomingCount: upcoming,
-      totalBookings: total,
-      nextAppointment: next,
-    );
-  }
-}
-
 /* =========================
    DASHBOARD HOME
    ========================= */
@@ -175,13 +114,36 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 
   Future<_DashboardData> _load() async {
-    final token = widget.session.authToken;
-    if (token == null || token.isEmpty) return const _DashboardData.empty();
-
     try {
-      return await _DashboardApi.fetchDashboard(
-        baseUrl: kApiBaseUrl,
-        token: token,
+      final appointments =
+          await BackendService.instance.fetchCustomerAppointments();
+      final now = DateTime.now();
+      final upcoming = appointments
+          .where(
+            (a) =>
+                a.startAt.isAfter(now) &&
+                a.status.toLowerCase() != 'cancelled',
+          )
+          .toList()
+        ..sort((a, b) => a.startAt.compareTo(b.startAt));
+
+      _AppointmentLite? next;
+      if (upcoming.isNotEmpty) {
+        final first = upcoming.first;
+        final title = first.services.isNotEmpty
+            ? first.services.map((s) => s.name).join(', ')
+            : first.businessName;
+        next = _AppointmentLite(
+          title: title,
+          startAt: first.startAt,
+          endAt: first.endAt,
+        );
+      }
+
+      return _DashboardData(
+        upcomingCount: upcoming.length,
+        totalBookings: appointments.length,
+        nextAppointment: next,
       );
     } catch (_) {
       return const _DashboardData.empty();
@@ -189,18 +151,32 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 
   String _monthAbbr(int month) {
-    const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const m = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC'
+    ];
     if (month < 1 || month > 12) return '';
     return m[month - 1];
   }
 
-  String _formatTimeRange(BuildContext context, DateTime startAt, DateTime endAt) {
+  String _formatTimeRange(
+      BuildContext context, DateTime startAt, DateTime endAt) {
     final loc = MaterialLocalizations.of(context);
     final s = TimeOfDay.fromDateTime(startAt.toLocal());
     final e = TimeOfDay.fromDateTime(endAt.toLocal());
     final sStr = loc.formatTimeOfDay(s);
     final eStr = loc.formatTimeOfDay(e);
-    return '$sStr – $eStr';
+    return '$sStr - $eStr';
   }
 
   @override
@@ -208,9 +184,19 @@ class _DashboardHomeState extends State<_DashboardHome> {
     final user = widget.session.currentUser;
 
     final fullName = (user?.fullName ?? '').trim();
-    final firstName = fullName.isNotEmpty ? fullName.split(RegExp(r'\s+')).first : '';
-    final greetingName = firstName.isNotEmpty ? firstName : 'there';
-    final avatarLetter = fullName.isNotEmpty ? fullName[0].toUpperCase() : '?';
+    final emailPrefix =
+        (user?.email ?? '').contains('@') ? user!.email.split('@').first : '';
+    final firstName =
+        fullName.isNotEmpty ? fullName.split(RegExp(r'\s+')).first : '';
+    final greetingName = firstName.isNotEmpty
+        ? firstName
+        : (emailPrefix.isNotEmpty ? emailPrefix : 'there');
+    final avatarLetter = (fullName.isNotEmpty
+            ? fullName[0]
+            : (user?.email ?? '').trim().isNotEmpty
+                ? user!.email.trim()[0]
+                : '?')
+        .toUpperCase();
 
     return FutureBuilder<_DashboardData>(
       future: _future,
@@ -225,9 +211,13 @@ class _DashboardHomeState extends State<_DashboardHome> {
         final next = data.nextAppointment;
 
         final nextTitle = next?.title ?? '';
-        final dayLabel = (next != null) ? _monthAbbr(next.startAt.toLocal().month) : '';
-        final dateNumber = (next != null) ? next.startAt.toLocal().day.toString() : '';
-        final timeRange = (next != null) ? _formatTimeRange(context, next.startAt, next.endAt) : '';
+        final dayLabel =
+            (next != null) ? _monthAbbr(next.startAt.toLocal().month) : '';
+        final dateNumber =
+            (next != null) ? next.startAt.toLocal().day.toString() : '';
+        final timeRange = (next != null)
+            ? _formatTimeRange(context, next.startAt, next.endAt)
+            : '';
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -473,7 +463,9 @@ class _ProfileTab extends StatelessWidget {
                 radius: 26,
                 backgroundColor: primaryPink,
                 child: Text(
-                  user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
+                  user.fullName.isNotEmpty
+                      ? user.fullName[0].toUpperCase()
+                      : '?',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -521,8 +513,7 @@ class _ProfileTab extends StatelessWidget {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Log out'),
-                    content:
-                        const Text('Are you sure you want to log out?'),
+                    content: const Text('Are you sure you want to log out?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
@@ -736,14 +727,18 @@ class _CalendarCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          const _CalendarNumberRow(numbers: ['29', '30', '1', '2', '3', '4', '5']),
-          const _CalendarNumberRow(numbers: ['6', '7', '8', '9', '10', '11', '12']),
-          const _CalendarNumberRow(numbers: ['13', '14', '15', '16', '17', '18', '19']),
+          const _CalendarNumberRow(
+              numbers: ['29', '30', '1', '2', '3', '4', '5']),
+          const _CalendarNumberRow(
+              numbers: ['6', '7', '8', '9', '10', '11', '12']),
+          const _CalendarNumberRow(
+              numbers: ['13', '14', '15', '16', '17', '18', '19']),
           const _CalendarNumberRow(
             numbers: ['20', '21', '22', '23', '24', '25', '26'],
             selectedIndex: 0,
           ),
-          const _CalendarNumberRow(numbers: ['27', '28', '29', '30', '31', '1', '2']),
+          const _CalendarNumberRow(
+              numbers: ['27', '28', '29', '30', '31', '1', '2']),
         ],
       ),
     );
@@ -859,7 +854,8 @@ class _AppointmentCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(dayLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(dayLabel,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 2),
                   Text(
                     dateNumber,
@@ -999,3 +995,5 @@ class _DiscoverCard extends StatelessWidget {
     );
   }
 }
+
+
