@@ -16,8 +16,8 @@ class BackendService {
         (envBase.isNotEmpty
             ? envBase
             : Platform.isAndroid
-                ? 'http://10.0.2.2:5000/api'
-                : 'http://localhost:5000/api');
+                ? 'http://10.0.2.2:5001/api'
+                : 'http://localhost:5001/api');
     _baseUrl = _normalizeBase(effectiveBase);
   }
 
@@ -33,28 +33,21 @@ class BackendService {
       base = base.substring(0, base.length - 1);
     }
 
-    // Ensure we hit the API prefix; if none provided, append /api.
     try {
       final uri = Uri.parse(base);
       final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
-
-      // If path already includes "api" anywhere (e.g., /api or /api/auth), keep as-is.
       final hasApi = segments.any((s) => s.toLowerCase() == 'api');
       if (!hasApi) {
-        final updated = uri.replace(
-          pathSegments: [...segments, 'api'],
-        );
+        final updated = uri.replace(pathSegments: [...segments, 'api']);
         return updated.toString();
       }
     } catch (_) {
-      // Fall back to the raw string if parsing fails.
       return base;
     }
 
     return base;
   }
 
-  /// Allow runtime override (e.g., when running on device, set to LAN IP).
   void setBaseUrl(String baseUrl) {
     _baseUrl = _normalizeBase(baseUrl);
   }
@@ -76,7 +69,6 @@ class BackendService {
     try {
       return json.decode(response.body);
     } catch (_) {
-      // Return plain text/HTML so the caller can surface a meaningful error.
       return response.body;
     }
   }
@@ -89,7 +81,7 @@ class BackendService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
         return mapper(decoded);
-      } catch (e) {
+      } catch (_) {
         throw AppException('Unexpected response from server.');
       }
     }
@@ -102,6 +94,7 @@ class BackendService {
     throw AppException(message);
   }
 
+  // Auth
   Future<AuthUser> login(String email, String password) async {
     final uri = Uri.parse('$_baseUrl/auth/login');
     final response = await _client.post(
@@ -130,7 +123,7 @@ class BackendService {
     required String password,
     String? phone,
   }) async {
-    final uri = Uri.parse('$_baseUrl/auth/register');
+    final uri = Uri.parse('$_baseUrl/auth/register/customer');
     final response = await _client.post(
       uri,
       headers: _headers(),
@@ -157,7 +150,7 @@ class BackendService {
   }
 
   Future<AuthUser> registerBusinessOwner(OwnerSignupModel model) async {
-    final uri = Uri.parse('$_baseUrl/auth/register-business');
+    final uri = Uri.parse('$_baseUrl/auth/register/business');
     final response = await _client.post(
       uri,
       headers: _headers(),
@@ -167,12 +160,12 @@ class BackendService {
         'password': model.password,
         'businessName': model.businessName,
         'businessType': model.businessType,
-        'phone': model.phone,
-        'publicEmail': model.publicEmail,
-        'street': model.street,
+        'address': model.street,
         'city': model.city,
         'state': model.state,
-        'postalCode': model.postalCode,
+        'zipCode': model.postalCode,
+        'phone': model.phone,
+        'website': '',
       }),
     );
 
@@ -189,6 +182,7 @@ class BackendService {
     });
   }
 
+  // Businesses & services
   Future<List<Business>> fetchBusinesses() async {
     final uri = Uri.parse('$_baseUrl/businesses');
     final response = await _client.get(uri, headers: _headers());
@@ -213,58 +207,27 @@ class BackendService {
     });
   }
 
-  Future<Business?> findBusinessById(String businessId) async {
-    final businesses = await fetchBusinesses();
-    try {
-      return businesses.firstWhere((b) => b.id == businessId);
-    } catch (_) {
-      return null;
-    }
+  // Appointments
+  Future<List<Appointment>> fetchCustomerAppointments() {
+    return fetchAppointments();
   }
 
-  Future<List<Appointment>> fetchCustomerAppointments() async {
-    final uri = Uri.parse('$_baseUrl/appointments/me');
+  Future<List<Appointment>> fetchAppointments() async {
+    String path = '/appointments';
+    final role = _session.currentRole?.toLowerCase();
+    if (role == 'business_owner') {
+      path = '/business/appointments';
+    } else if (role == 'staff') {
+      path = '/staff/appointments';
+    }
+
+    final uri = Uri.parse('$_baseUrl$path');
     final response = await _client.get(uri, headers: _headers(withAuth: true));
 
     return _handleResponse(response, (jsonBody) {
       if (jsonBody is! List) return <Appointment>[];
       return jsonBody
-          .map(
-            (item) => Appointment.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList();
-    });
-  }
-
-  Future<List<AvailabilitySlot>> fetchBusinessAvailability({
-    required String businessId,
-    required DateTime date,
-    int? durationMinutes,
-  }) async {
-    final params = <String, String>{
-      'date': _formatDate(date),
-    };
-    if (durationMinutes != null && durationMinutes > 0) {
-      params['durationMinutes'] = '$durationMinutes';
-    }
-
-    final uri = Uri.parse('$_baseUrl/businesses/$businessId/availability')
-        .replace(queryParameters: params);
-    final response = await _client.get(uri, headers: _headers());
-
-    return _handleResponse(response, (jsonBody) {
-      if (jsonBody is! Map) return <AvailabilitySlot>[];
-      final slots = jsonBody['slots'];
-      if (slots is! List) return <AvailabilitySlot>[];
-      return slots
-          .whereType<Map>()
-          .map(
-            (item) => AvailabilitySlot.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
+          .map((item) => Appointment.fromJson(Map<String, dynamic>.from(item)))
           .toList();
     });
   }
@@ -285,9 +248,9 @@ class BackendService {
         'businessId': int.tryParse(businessId) ?? businessId,
         'serviceIds': serviceIds.map((id) => int.tryParse(id) ?? id).toList(),
         'staffId': staffId != null ? int.tryParse(staffId) ?? staffId : null,
-        'appointmentDate': startAt.toIso8601String().split('T').first,
-        'startTime': startAt.toIso8601String().split('T').last.substring(0, 8),
-        'endTime': endAt.toIso8601String().split('T').last.substring(0, 8),
+        'appointmentDate': _formatDate(startAt),
+        'startTime': _formatTime(startAt),
+        'endTime': _formatTime(endAt),
         'notes': notes ?? '',
       }),
     );
@@ -298,8 +261,8 @@ class BackendService {
   }
 
   Future<void> cancelAppointment(String appointmentId) async {
-    final uri = Uri.parse('$_baseUrl/appointments/$appointmentId/cancel');
-    final response = await _client.patch(
+    final uri = Uri.parse('$_baseUrl/appointments/$appointmentId');
+    final response = await _client.delete(
       uri,
       headers: _headers(withAuth: true),
     );
@@ -317,8 +280,10 @@ class BackendService {
       uri,
       headers: _headers(withAuth: true),
       body: jsonEncode({
-        'startAt': startAt.toIso8601String(),
-        'endAt': endAt.toIso8601String(),
+        'appointmentDate': _formatDate(startAt),
+        'startTime': _formatTime(startAt),
+        'endTime': _formatTime(endAt),
+        'totalDuration': endAt.difference(startAt).inMinutes,
       }),
     );
 
@@ -329,19 +294,33 @@ class BackendService {
     required String appointmentId,
     required String notes,
   }) async {
-    final uri = Uri.parse('$_baseUrl/appointments/$appointmentId/notes');
-    final response = await _client.patch(
-      uri,
-      headers: _headers(withAuth: true),
-      body: jsonEncode({'notes': notes}),
-    );
-    _handleResponse(response, (_) => null);
+    // Backend does not support notes update; surface as unsupported.
+    throw const AppException('Updating notes is not supported.');
   }
 
-  String _formatDate(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
+  Future<BusinessAvailability> fetchBusinessAvailability({
+    required String businessId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = _formatDate(startDate);
+    if (endDate != null) params['endDate'] = _formatDate(endDate);
+
+    final uri = Uri.parse('$_baseUrl/businesses/$businessId/availability')
+        .replace(queryParameters: params.isEmpty ? null : params);
+    final response = await _client.get(uri, headers: _headers());
+
+    return _handleResponse(
+      response,
+      (jsonBody) => BusinessAvailability.fromJson(
+        Map<String, dynamic>.from(jsonBody as Map),
+      ),
+    );
   }
+
+  String _formatDate(DateTime date) => date.toIso8601String().split('T').first;
+
+  String _formatTime(DateTime date) =>
+      date.toIso8601String().split('T').last.substring(0, 8);
 }

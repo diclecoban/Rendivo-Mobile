@@ -303,8 +303,8 @@ class AvailabilitySlot {
   });
 
   factory AvailabilitySlot.fromJson(Map<String, dynamic> json) {
-    final startStr = json['startAt']?.toString();
-    final endStr = json['endAt']?.toString();
+    final startStr = json['startAt']?.toString() ?? json['start']?.toString();
+    final endStr = json['endAt']?.toString() ?? json['end']?.toString();
     final fallback = DateTime.now();
     return AvailabilitySlot(
       startAt: startStr != null ? DateTime.parse(startStr) : fallback,
@@ -322,6 +322,41 @@ class AvailabilitySlot {
     }
 
     return '${format(startAt)} - ${format(endAt)}';
+  }
+}
+
+class BusinessAvailability {
+  final String businessId;
+  final String startDate;
+  final String endDate;
+  final List<String> bookedDays;
+  final List<AvailabilitySlot> bookedSlots;
+
+  const BusinessAvailability({
+    required this.businessId,
+    required this.startDate,
+    required this.endDate,
+    required this.bookedDays,
+    required this.bookedSlots,
+  });
+
+  factory BusinessAvailability.fromJson(Map<String, dynamic> json) {
+    final slots = (json['bookedSlots'] as List?)
+            ?.map((item) => AvailabilitySlot.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList() ??
+        <AvailabilitySlot>[];
+    final days =
+        (json['bookedDays'] as List?)?.map((d) => d.toString()).toList() ??
+            <String>[];
+    return BusinessAvailability(
+      businessId: (json['businessId'] ?? '').toString(),
+      startDate: (json['startDate'] ?? '').toString(),
+      endDate: (json['endDate'] ?? '').toString(),
+      bookedDays: days,
+      bookedSlots: slots,
+    );
   }
 }
 
