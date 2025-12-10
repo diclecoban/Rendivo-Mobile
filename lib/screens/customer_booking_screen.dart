@@ -25,13 +25,17 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   List<ServiceItem> _services = [];
   final Set<String> _selectedServiceIds = {};
   DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = TimeOfDay.now();
   final TextEditingController _notesController = TextEditingController();
+  List<AvailabilitySlot> _availableSlots = [];
+  bool _slotsLoading = false;
+  String? _slotsError;
+  AvailabilitySlot? _selectedSlot;
 
   @override
   void initState() {
     super.initState();
     _loadServices();
+    _loadAvailability();
   }
 
   @override
@@ -69,6 +73,41 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   int get _totalDuration =>
       _selectedServices.fold(0, (sum, item) => sum + item.durationMinutes);
 
+  int get _effectiveDuration => _totalDuration > 0 ? _totalDuration : 30;
+
+  Future<void> _loadAvailability() async {
+    if (!mounted) return;
+    setState(() {
+      _slotsLoading = true;
+      _slotsError = null;
+    });
+
+    try {
+      final slots = await _backend.fetchBusinessAvailability(
+        businessId: widget.business.id,
+        date: _selectedDate,
+        durationMinutes: _effectiveDuration,
+      );
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = slots;
+        _selectedSlot = slots.isNotEmpty ? slots.first : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _slotsError = 'Could not load availability right now.';
+        _availableSlots = [];
+        _selectedSlot = null;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _slotsLoading = false;
+      });
+    }
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -78,27 +117,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      _loadAvailability();
     }
-  }
-
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-    );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
-    }
-  }
-
-  DateTime _combineDateTime() {
-    return DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
-    );
   }
 
   Future<void> _book() async {
@@ -117,9 +137,13 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
       return;
     }
 
-    final startAt = _combineDateTime();
-    final endAt =
-        startAt.add(Duration(minutes: _totalDuration > 0 ? _totalDuration : 30));
+    final slot = _selectedSlot;
+    if (slot == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select an available time slot.')),
+      );
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
@@ -127,8 +151,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         business: widget.business,
         customer: user,
         services: _selectedServices,
-        startAt: startAt,
-        endAt: endAt,
+        startAt: slot.startAt,
+        endAt: slot.endAt,
         staff: null,
         notes: _notesController.text.trim().isEmpty
             ? null
@@ -315,6 +339,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                                 _selectedServiceIds.add(service.id);
                               }
                             });
+                            _loadAvailability();
                           },
                           activeColor: primaryPink,
                         ),
@@ -364,49 +389,25 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _pickDate,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        backgroundColor: Colors.white,
-                      ),
-                      child: Text(
-                        '${_selectedDate.month}/${_selectedDate.day}/${_selectedDate.year}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+              OutlinedButton(
+                onPressed: _pickDate,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _pickTime,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        backgroundColor: Colors.white,
-                      ),
-                      child: Text(
-                        _selectedTime.format(context),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                  backgroundColor: Colors.white,
+                ),
+                child: Text(
+                  '${_selectedDate.month}/${_selectedDate.day}/${_selectedDate.year}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
+                ),
               ),
+              const SizedBox(height: 12),
+              _buildAvailabilitySection(),
               const SizedBox(height: 16),
               TextField(
                 controller: _notesController,
@@ -514,6 +515,79 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAvailabilitySection() {
+    if (_slotsLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_slotsError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _slotsError!,
+            style: const TextStyle(
+              color: Colors.redAccent,
+              fontSize: 12,
+            ),
+          ),
+          TextButton(
+            onPressed: _loadAvailability,
+            child: const Text('Retry'),
+          ),
+        ],
+      );
+    }
+
+    if (_availableSlots.isEmpty) {
+      return const Text(
+        'No available time slots for this date. Please try another day.',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey,
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _availableSlots.map((slot) {
+        final isSelected = _selectedSlot != null &&
+            _selectedSlot!.startAt == slot.startAt &&
+            _selectedSlot!.endAt == slot.endAt;
+        return ChoiceChip(
+          label: Text(
+            slot.label(),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? primaryPink : Colors.black87,
+            ),
+          ),
+          selected: isSelected,
+          onSelected: (_) {
+            setState(() {
+              _selectedSlot = slot;
+            });
+          },
+          selectedColor: primaryPink.withOpacity(0.18),
+          backgroundColor: Colors.white,
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: isSelected ? primaryPink : Colors.grey.shade300,
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
