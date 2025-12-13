@@ -105,11 +105,24 @@ class _CustomerAppointmentsScreenState
       pickedTime.hour,
       pickedTime.minute,
     );
-    final minutes =
-        appointment.totalDurationMinutes > 0 ? appointment.totalDurationMinutes : 30;
-    final newEnd = newStart.add(Duration(minutes: minutes));
+    final newEnd = newStart.add(Duration(minutes: _durationFor(appointment)));
 
     try {
+      final available = await _isSlotAvailable(
+        appointment,
+        newStart,
+        newEnd,
+      );
+      if (!available) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selected slot is no longer available. Please pick another time.'),
+          ),
+        );
+        return;
+      }
+
       await _backend.rescheduleAppointment(
         appointmentId: appointment.id,
         startAt: newStart,
@@ -131,6 +144,35 @@ class _CustomerAppointmentsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to reschedule: $e')),
       );
+    }
+  }
+
+  int _durationFor(Appointment appointment) =>
+      appointment.totalDurationMinutes > 0 ? appointment.totalDurationMinutes : 30;
+
+  Future<bool> _isSlotAvailable(
+    Appointment appointment,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final businessId = appointment.businessId;
+    if (businessId.isEmpty) return true;
+
+    bool sameMoment(DateTime a, DateTime b) =>
+        a.toUtc().difference(b.toUtc()).inSeconds.abs() < 1;
+
+    try {
+      final slots = await _backend.fetchBusinessAvailability(
+        businessId: businessId,
+        date: start,
+        durationMinutes: _durationFor(appointment),
+      );
+      return slots.any(
+        (slot) => sameMoment(slot.startAt, start) && sameMoment(slot.endAt, end),
+      );
+    } catch (_) {
+      // If availability lookup fails, allow the request to proceed so backend can validate.
+      return true;
     }
   }
 

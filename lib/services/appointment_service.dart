@@ -1,10 +1,22 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/app_models.dart';
 import 'backend_service.dart';
 
 class AppointmentService {
   AppointmentService._();
 
-  static final BackendService _backend = BackendService.instance;
+  static BackendService _backend = BackendService.instance;
+
+  @visibleForTesting
+  static void overrideBackend(BackendService backend) {
+    _backend = backend;
+  }
+
+  @visibleForTesting
+  static void resetBackend() {
+    _backend = BackendService.instance;
+  }
 
   static Future<String> createAppointment({
     required Business business,

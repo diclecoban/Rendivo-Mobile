@@ -22,6 +22,24 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
   String? _error;
   int _currentIndex = 0;
 
+  final Map<String, bool> _weeklyAvailability = {
+    'Mon': true,
+    'Tue': true,
+    'Wed': true,
+    'Thu': true,
+    'Fri': true,
+    'Sat': false,
+    'Sun': false,
+  };
+  TimeOfDay _startOfDay = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _endOfDay = const TimeOfDay(hour: 18, minute: 0);
+  bool _autoAssignClients = true;
+
+  bool _pushNotifications = true;
+  bool _emailSummaries = false;
+  bool _autoConfirm = true;
+  double _prepBufferMinutes = 15;
+
   @override
   void initState() {
     super.initState();
@@ -29,20 +47,42 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
   }
 
   Future<void> _loadAppointments() async {
-    final hasToken =
-        _session.authToken != null && _session.authToken!.isNotEmpty;
-    if (!hasToken) return;
-
     setState(() {
       _loading = true;
       _error = null;
     });
 
+    final hasToken =
+        _session.authToken != null && _session.authToken!.isNotEmpty;
+    if (!hasToken) {
+      setState(() {
+        _loading = false;
+        _error = 'Please sign in to view your schedule.';
+        _appointments = [];
+      });
+      return;
+    }
+
+    final role = (_session.currentRole ?? '').toLowerCase();
+    final isStaff = role == 'staff' || role == 'business_owner';
+    if (!isStaff) {
+      setState(() {
+        _loading = false;
+        _error = 'Staff dashboard is available for staff accounts only.';
+        _appointments = [];
+      });
+      return;
+    }
+
     try {
-      final data = await _backend.fetchCustomerAppointments();
+      final data = await _backend.fetchStaffAppointments();
       data.sort((a, b) => a.startAt.compareTo(b.startAt));
       setState(() {
         _appointments = data;
+      });
+    } on AppException catch (e) {
+      setState(() {
+        _error = e.message;
       });
     } catch (e) {
       setState(() {
@@ -95,10 +135,47 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
     return '$hour:$minute $suffix';
   }
 
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final suffix = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $suffix';
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final initial = isStart ? _startOfDay : _endOfDay;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startOfDay = picked;
+      } else {
+        _endOfDay = picked;
+      }
+    });
+  }
+
+  void _saveAvailability() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Availability saved for your manager.'),
+      ),
+    );
+  }
+
+  void _saveSettings() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Settings updated.'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = _session.currentUser;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       bottomNavigationBar: BottomNavigationBar(
@@ -125,164 +202,360 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
             label: 'Settings',
           ),
         ],
-        onTap: (index) {
-          setState(() => _currentIndex = index);
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const CustomerAppointmentsScreen(),
-              ),
-            );
-          }
-        },
+        onTap: (index) => setState(() => _currentIndex = index),
       ),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadAppointments,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildDashboardContent(context),
+            _buildBookingsContent(context),
+            _buildAvailabilityContent(context),
+            _buildSettingsContent(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboardContent(BuildContext context) {
+    final user = _session.currentUser;
+    return RefreshIndicator(
+      onRefresh: _loadAppointments,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _greeting(),
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            "Here's what's on your schedule.",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      _greeting(),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: primaryPink,
-                      child: Text(
-                        (user?.fullName.isNotEmpty ?? false)
-                            ? user!.fullName[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      "Here's what's on your schedule.",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
                       ),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Today',
-                        mainValue: _loading ? '...' : _todayCount.toString(),
-                        trendText: 'Bookings today',
-                        trendColor: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Upcoming',
-                        mainValue:
-                            _loading ? '...' : _upcomingCount.toString(),
-                        trendText: 'Future bookings',
-                        trendColor: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                const Text(
-                  'Upcoming Bookings',
-                  style: TextStyle(
-                    fontSize: 14,
+              ),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: primaryPink,
+                child: Text(
+                  (user?.fullName.isNotEmpty ?? false)
+                      ? user!.fullName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 8),
-                if (_loading)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator(color: primaryPink),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _KpiCard(
+                  title: 'Today',
+                  mainValue: _loading ? '...' : _todayCount.toString(),
+                  trendText: 'Bookings today',
+                  trendColor: Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _KpiCard(
+                  title: 'Upcoming',
+                  mainValue: _loading ? '...' : _upcomingCount.toString(),
+                  trendText: 'Future bookings',
+                  trendColor: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Upcoming Bookings',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ..._buildAppointmentsList(limit: 5),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookingsContent(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _loadAppointments,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Booking Overview',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CustomerAppointmentsScreen(),
                     ),
-                  )
-                else if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  )
-                else if (_appointments.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'No bookings yet',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'New bookings will appear here once scheduled.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Column(
-                    children: _appointments
-                        .take(5)
-                        .map(
-                          (a) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _BookingCard(
-                              service: a.services.isNotEmpty
-                                  ? a.services.first.name
-                                  : a.businessName,
-                              time: _formatTime(a.startAt),
-                              client: a.customerName.isNotEmpty
-                                  ? a.customerName
-                                  : a.customerEmail,
-                              status: a.status,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                  );
+                },
+                child: const Text(
+                  'View all',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: primaryPink,
                   ),
-              ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ..._buildAppointmentsList(),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildAppointmentsList({int? limit}) {
+    if (_loading) {
+      return [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: CircularProgressIndicator(color: primaryPink),
+          ),
+        ),
+      ];
+    }
+    if (_error != null) {
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            _error!,
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      ];
+    }
+    if (_appointments.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'No bookings yet',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'New bookings will appear here once scheduled.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ];
+    }
+
+    final items = limit != null ? _appointments.take(limit) : _appointments;
+    return items
+        .map(
+          (a) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _BookingCard(
+              service: a.services.isNotEmpty
+                  ? a.services.first.name
+                  : a.businessName,
+              time: _formatTime(a.startAt),
+              client: a.customerName.isNotEmpty
+                  ? a.customerName
+                  : a.customerEmail,
+              status: a.status,
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  Widget _buildAvailabilityContent(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Weekly Availability',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        ..._weeklyAvailability.entries.map(
+          (entry) => SwitchListTile(
+            title: Text(entry.key),
+            subtitle: Text(
+              entry.value ? 'Accepting bookings' : 'Day off',
+            ),
+            value: entry.value,
+            activeColor: primaryPink,
+            onChanged: (value) {
+              setState(() {
+                _weeklyAvailability[entry.key] = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => _pickTime(isStart: true),
+                child: Text('Start: ${_formatTimeOfDay(_startOfDay)}'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => _pickTime(isStart: false),
+                child: Text('End: ${_formatTimeOfDay(_endOfDay)}'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          value: _autoAssignClients,
+          title: const Text('Auto-assign clients'),
+          subtitle: const Text('Let the system assign any staff member'),
+          activeColor: primaryPink,
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => _autoAssignClients = value);
+          },
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _saveAvailability,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryPink,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Save availability',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsContent(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Notifications',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          title: const Text('Push notifications'),
+          subtitle: const Text('Alert me when a new booking is assigned'),
+          activeColor: primaryPink,
+          value: _pushNotifications,
+          onChanged: (value) => setState(() => _pushNotifications = value),
+        ),
+        SwitchListTile(
+          title: const Text('Email summaries'),
+          subtitle: const Text('Send me a summary every morning'),
+          activeColor: primaryPink,
+          value: _emailSummaries,
+          onChanged: (value) => setState(() => _emailSummaries = value),
+        ),
+        SwitchListTile(
+          title: const Text('Auto-confirm appointments'),
+          subtitle: const Text('Automatically confirm new requests'),
+          activeColor: primaryPink,
+          value: _autoConfirm,
+          onChanged: (value) => setState(() => _autoConfirm = value),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Preparation buffer (minutes)',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        Slider(
+          value: _prepBufferMinutes,
+          min: 0,
+          max: 60,
+          divisions: 12,
+          label: _prepBufferMinutes.round().toString(),
+          activeColor: primaryPink,
+          onChanged: (value) => setState(() => _prepBufferMinutes = value),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _saveSettings,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryPink,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Save settings',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -412,7 +685,7 @@ class _BookingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$time · $client',
+                  '$time - $client',
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.grey,

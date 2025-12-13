@@ -1,23 +1,20 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
+import '../services/backend_service.dart';
 import '../services/session_service.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'customer_appointments_screen.dart';
 import 'customer_discover_screen.dart';
 
-/// ✅ TODO: set this to your backend base URL
-const String kApiBaseUrl = 'https://YOUR_BACKEND_URL';
-
 class CustomerDashboardScreen extends StatefulWidget {
   const CustomerDashboardScreen({super.key});
 
   @override
-  State<CustomerDashboardScreen> createState() => _CustomerDashboardScreenState();
+  State<CustomerDashboardScreen> createState() =>
+      _CustomerDashboardScreenState();
 }
 
 class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
@@ -94,62 +91,20 @@ class _AppointmentLite {
   });
 }
 
-class _DashboardApi {
-  /// ✅ Expected backend response shape (adjust keys if your backend differs):
-  /// {
-  ///   "upcomingCount": 3,
-  ///   "totalBookings": 12,
-  ///   "nextAppointment": {
-  ///     "title": "Chic Haircut & Style",
-  ///     "startAt": "2025-10-20T10:30:00Z",
-  ///     "endAt": "2025-10-20T11:30:00Z"
-  ///   }
-  /// }
-  static Future<_DashboardData> fetchDashboard({
-    required String baseUrl,
-    required String token,
-  }) async {
-    final uri = Uri.parse('$baseUrl/customer/dashboard'); // ✅ change path if needed
+enum _AppointmentTab { upcoming, history }
 
-    final res = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+class _DashboardBundle {
+  final _DashboardData summary;
+  final List<Appointment> appointments;
 
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      // Fail-safe: don't crash UI
-      return const _DashboardData.empty();
-    }
+  const _DashboardBundle({
+    required this.summary,
+    required this.appointments,
+  });
 
-    final map = jsonDecode(res.body) as Map<String, dynamic>;
-
-    final upcoming = (map['upcomingCount'] is num) ? (map['upcomingCount'] as num).toInt() : 0;
-    final total = (map['totalBookings'] is num) ? (map['totalBookings'] as num).toInt() : 0;
-
-    _AppointmentLite? next;
-    final nextMap = map['nextAppointment'];
-    if (nextMap is Map<String, dynamic>) {
-      final title = (nextMap['title'] as String?)?.trim() ?? '';
-      final startStr = (nextMap['startAt'] as String?)?.trim();
-      final endStr = (nextMap['endAt'] as String?)?.trim();
-
-      final startAt = startStr != null ? DateTime.tryParse(startStr) : null;
-      final endAt = endStr != null ? DateTime.tryParse(endStr) : null;
-
-      if (title.isNotEmpty && startAt != null && endAt != null) {
-        next = _AppointmentLite(title: title, startAt: startAt, endAt: endAt);
-      }
-    }
-
-    return _DashboardData(
-      upcomingCount: upcoming,
-      totalBookings: total,
-      nextAppointment: next,
-    );
-  }
+  const _DashboardBundle.empty()
+      : summary = const _DashboardData.empty(),
+        appointments = const [];
 }
 
 /* =========================
@@ -166,7 +121,8 @@ class _DashboardHome extends StatefulWidget {
 }
 
 class _DashboardHomeState extends State<_DashboardHome> {
-  late final Future<_DashboardData> _future;
+  late final Future<_DashboardBundle> _future;
+  _AppointmentTab _activeTab = _AppointmentTab.upcoming;
 
   @override
   void initState() {
@@ -174,27 +130,167 @@ class _DashboardHomeState extends State<_DashboardHome> {
     _future = _load();
   }
 
-  Future<_DashboardData> _load() async {
+  Future<_DashboardBundle> _load() async {
     final token = widget.session.authToken;
-    if (token == null || token.isEmpty) return const _DashboardData.empty();
+    if (token == null || token.isEmpty) {
+      return const _DashboardBundle.empty();
+    }
 
     try {
-      return await _DashboardApi.fetchDashboard(
-        baseUrl: kApiBaseUrl,
-        token: token,
+      final backend = BackendService.instance;
+      final map = await backend.fetchCustomerDashboard();
+      final appointments = await backend.fetchCustomerAppointments();
+
+      final upcoming = (map['upcomingCount'] is num)
+          ? (map['upcomingCount'] as num).toInt()
+          : 0;
+      final total = (map['totalBookings'] is num)
+          ? (map['totalBookings'] as num).toInt()
+          : 0;
+
+      _AppointmentLite? next;
+      final nextMap = map['nextAppointment'];
+      if (nextMap is Map<String, dynamic>) {
+        final title = (nextMap['title'] as String?)?.trim() ?? '';
+        final startStr = (nextMap['startAt'] as String?)?.trim();
+        final endStr = (nextMap['endAt'] as String?)?.trim();
+
+        final startAt = startStr != null ? DateTime.tryParse(startStr) : null;
+        final endAt = endStr != null ? DateTime.tryParse(endStr) : null;
+
+        if (title.isNotEmpty && startAt != null && endAt != null) {
+          next = _AppointmentLite(title: title, startAt: startAt, endAt: endAt);
+        }
+      }
+
+      final sortedUpcoming = _filterUpcoming(appointments);
+      final fallbackNext = next ?? (sortedUpcoming.isNotEmpty
+          ? _AppointmentLite(
+              title: sortedUpcoming.first.businessName,
+              startAt: sortedUpcoming.first.startAt,
+              endAt: sortedUpcoming.first.endAt,
+            )
+          : null);
+
+      final summary = _DashboardData(
+        upcomingCount: upcoming,
+        totalBookings: total,
+        nextAppointment: fallbackNext,
       );
+
+      return _DashboardBundle(summary: summary, appointments: appointments);
     } catch (_) {
-      return const _DashboardData.empty();
+      return const _DashboardBundle.empty();
     }
   }
 
+  List<Appointment> _filterUpcoming(List<Appointment> appointments) {
+    final now = DateTime.now();
+    final filtered = appointments.where((appointment) {
+      final status = appointment.status.toLowerCase();
+      final isCancelled = status.contains('cancel');
+      return !isCancelled && appointment.startAt.isAfter(now);
+    }).toList();
+    filtered.sort((a, b) => a.startAt.compareTo(b.startAt));
+    return filtered;
+  }
+
+  List<Appointment> _filterHistory(List<Appointment> appointments) {
+    final now = DateTime.now();
+    final filtered = appointments.where((appointment) {
+      final status = appointment.status.toLowerCase();
+      final isCompleted = status.contains('complete');
+      final isPast = appointment.startAt.isBefore(now);
+      return isCompleted || isPast;
+    }).toList();
+    filtered.sort((a, b) => b.startAt.compareTo(a.startAt));
+    return filtered;
+  }
+
+  void _setActiveTab(_AppointmentTab tab) {
+    if (_activeTab == tab) return;
+    setState(() => _activeTab = tab);
+  }
+
+  String _formatStatusLabel(String status) {
+    if (status.isEmpty) return '';
+    final normalized = status.toLowerCase();
+    return normalized.replaceFirst(
+      normalized.isNotEmpty ? normalized[0] : '',
+      normalized.isNotEmpty ? normalized[0].toUpperCase() : '',
+    );
+  }
+
+  Widget _buildAppointmentList({
+    required BuildContext context,
+    required List<Appointment> appointments,
+    required bool isHistory,
+  }) {
+    if (appointments.isEmpty) {
+      final text = isHistory ? 'Burası boş.' : 'No upcoming appointments yet.';
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      children: appointments.map((appointment) {
+        final start = appointment.startAt.toLocal();
+        final end = appointment.endAt.toLocal();
+        final title =
+            appointment.businessName.isNotEmpty ? appointment.businessName : 'Appointment';
+        final time = _formatTimeRange(context, start, end);
+        final displayTime = isHistory
+            ? '$time · ${_formatStatusLabel(appointment.status)}'
+            : time;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _AppointmentCard(
+            dayLabel: _monthAbbr(start.month),
+            dateNumber: start.day.toString(),
+            title: title,
+            time: displayTime,
+            actions: isHistory ? const [] : const ['Reschedule', 'Cancel'],
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CustomerAppointmentsScreen(),
+                ),
+              );
+            },
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   String _monthAbbr(int month) {
-    const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const m = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC'
+    ];
     if (month < 1 || month > 12) return '';
     return m[month - 1];
   }
 
-  String _formatTimeRange(BuildContext context, DateTime startAt, DateTime endAt) {
+  String _formatTimeRange(
+      BuildContext context, DateTime startAt, DateTime endAt) {
     final loc = MaterialLocalizations.of(context);
     final s = TimeOfDay.fromDateTime(startAt.toLocal());
     final e = TimeOfDay.fromDateTime(endAt.toLocal());
@@ -208,26 +304,25 @@ class _DashboardHomeState extends State<_DashboardHome> {
     final user = widget.session.currentUser;
 
     final fullName = (user?.fullName ?? '').trim();
-    final firstName = fullName.isNotEmpty ? fullName.split(RegExp(r'\s+')).first : '';
+    final firstName =
+        fullName.isNotEmpty ? fullName.split(RegExp(r'\s+')).first : '';
     final greetingName = firstName.isNotEmpty ? firstName : 'there';
     final avatarLetter = fullName.isNotEmpty ? fullName[0].toUpperCase() : '?';
 
-    return FutureBuilder<_DashboardData>(
+    return FutureBuilder<_DashboardBundle>(
       future: _future,
       builder: (context, snap) {
-        final data = snap.data ?? const _DashboardData.empty();
+        final payload = snap.data ?? const _DashboardBundle.empty();
+        final data = payload.summary;
+        final appointments = payload.appointments;
+        final upcomingAppointments = _filterUpcoming(appointments);
+        final historyAppointments = _filterHistory(appointments);
 
         // ✅ stats from backend
         final upcomingValue = data.upcomingCount.toString();
         final totalBookingsValue = data.totalBookings.toString();
 
         // ✅ next appointment (nullable)
-        final next = data.nextAppointment;
-
-        final nextTitle = next?.title ?? '';
-        final dayLabel = (next != null) ? _monthAbbr(next.startAt.toLocal().month) : '';
-        final dateNumber = (next != null) ? next.startAt.toLocal().day.toString() : '';
-        final timeRange = (next != null) ? _formatTimeRange(context, next.startAt, next.endAt) : '';
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -241,7 +336,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hello, $greetingName!',
+                          'Hey, $greetingName!',
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
@@ -278,38 +373,6 @@ class _DashboardHomeState extends State<_DashboardHome> {
               ),
               const SizedBox(height: 16),
 
-              // ✅ counts from backend
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      title: 'Upcoming',
-                      value: upcomingValue,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      title: 'Total Bookings',
-                      value: totalBookingsValue,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-              _DiscoverCard(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CustomerDiscoverScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -342,89 +405,88 @@ class _DashboardHomeState extends State<_DashboardHome> {
               ),
 
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'Upcoming',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryPink,
-                                ),
-                              ),
+              Container(
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _setActiveTab(_AppointmentTab.upcoming),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          decoration: BoxDecoration(
+                            color: _activeTab == _AppointmentTab.upcoming
+                                ? primaryPink.withOpacity(0.12)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Upcoming',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _activeTab == _AppointmentTab.upcoming
+                                  ? primaryPink
+                                  : Colors.grey,
                             ),
                           ),
-                          Expanded(
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: const Text(
-                                'Booking History',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _setActiveTab(_AppointmentTab.history),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          decoration: BoxDecoration(
+                            color: _activeTab == _AppointmentTab.history
+                                ? primaryPink.withOpacity(0.12)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Booking History',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _activeTab == _AppointmentTab.history
+                                  ? primaryPink
+                                  : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 16),
-              const _CalendarCard(),
+              _CalendarStrip(
+                next: data.nextAppointment,
+              ),
               const SizedBox(height: 16),
 
-              // ✅ this title becomes EMPTY (and hidden) if there is no appointment
-              if (nextTitle.isNotEmpty) ...[
-                Text(
-                  nextTitle,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _AppointmentCard(
-                  dayLabel: dayLabel,
-                  dateNumber: dateNumber,
-                  title: nextTitle,
-                  time: timeRange,
-                  actions: const ['Reschedule', 'Cancel'],
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Open the My Appointments tab to view full appointment details.',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-
+              _buildAppointmentList(
+                context: context,
+                appointments: _activeTab == _AppointmentTab.history
+                    ? historyAppointments
+                    : upcomingAppointments,
+                isHistory: _activeTab == _AppointmentTab.history,
+              ),
               const SizedBox(height: 24),
             ],
           ),
@@ -442,6 +504,24 @@ class _ProfileTab extends StatelessWidget {
   final SessionService session;
 
   const _ProfileTab({required this.session});
+
+  void _showPasswordResetDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset password'),
+        content: const Text(
+          'A self-service reset flow is coming soon. For now, use the "Forgot your password?" link on the login screen or contact support.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -461,6 +541,13 @@ class _ProfileTab extends StatelessWidget {
         ),
       );
     }
+
+    final trimmedName = user.fullName.trim();
+    final parts = trimmedName.isNotEmpty
+        ? trimmedName.split(RegExp(r'\s+')).where((value) => value.isNotEmpty).toList()
+        : const <String>[];
+    final firstName = parts.isNotEmpty ? parts.first : '';
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -502,27 +589,33 @@ class _ProfileTab extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const Text(
-            'Account',
+            'Personal Details',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 18),
+          _ProfileReadOnlyField(label: 'First name', value: firstName),
+          const SizedBox(height: 10),
+          _ProfileReadOnlyField(label: 'Last name', value: lastName),
+          const SizedBox(height: 12),
+          const Text(
+            'Security',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          _ProfileRow(label: 'Role', value: user.role),
-          _ProfileRow(label: 'User ID', value: user.id),
-          if (session.authToken != null && session.authToken!.isNotEmpty)
-            const _ProfileRow(label: 'Token', value: 'Received'),
+          _PasswordCard(
+            onReset: () => _showPasswordResetDialog(context),
+          ),
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
             height: 44,
             child: ElevatedButton(
               onPressed: () async {
-                // Confirm before logging out
                 final doLogout = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Log out'),
-                    content:
-                        const Text('Are you sure you want to log out?'),
+                    content: const Text('Are you sure you want to log out?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
@@ -540,7 +633,6 @@ class _ProfileTab extends StatelessWidget {
                 );
 
                 if (doLogout == true) {
-                  // Clear session and go back to login screen
                   AuthService.signOut();
                   if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
@@ -572,22 +664,126 @@ class _ProfileTab extends StatelessWidget {
   }
 }
 
-class _SettingsTab extends StatelessWidget {
+class _SettingsTab extends StatefulWidget {
   const _SettingsTab();
 
   @override
+  State<_SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<_SettingsTab> {
+  bool _pushReminders = true;
+  bool _emailUpdates = false;
+  bool _calendarSync = false;
+  String _theme = 'System default';
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.settings_outlined, size: 56, color: Colors.grey),
-          SizedBox(height: 12),
-          Text(
-            'Settings coming soon.',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-        ],
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Preferences',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            _SettingsCard(
+              title: 'Notifications',
+              children: [
+                _SettingsSwitchTile(
+                  title: 'Push reminders',
+                  subtitle: 'Get notified before upcoming appointments',
+                  value: _pushReminders,
+                  onChanged: (value) => setState(() => _pushReminders = value),
+                ),
+                const Divider(height: 0),
+                _SettingsSwitchTile(
+                  title: 'Email updates',
+                  subtitle: 'Receive booking confirmations via email',
+                  value: _emailUpdates,
+                  onChanged: (value) => setState(() => _emailUpdates = value),
+                ),
+                const Divider(height: 0),
+                _SettingsSwitchTile(
+                  title: 'Calendar sync',
+                  subtitle: 'Send appointments to your default calendar',
+                  value: _calendarSync,
+                  onChanged: (value) => setState(() => _calendarSync = value),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SettingsCard(
+              title: 'Appearance',
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: DropdownButtonFormField<String>(
+                    value: _theme,
+                    decoration: const InputDecoration(
+                      labelText: 'Theme',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'System default', child: Text('System default')),
+                      DropdownMenuItem(value: 'Light', child: Text('Light')),
+                      DropdownMenuItem(value: 'Dark', child: Text('Dark')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _theme = value);
+                      _showSnack('Theme preference saved: $value');
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SettingsCard(
+              title: 'Privacy & data',
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Clear search history'),
+                  subtitle: const Text('Remove recently viewed businesses from this device'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showSnack('Search history cleared.'),
+                ),
+                const Divider(height: 0),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Download my data'),
+                  subtitle: const Text('Request a copy of appointments and profile info'),
+                  trailing: const Icon(Icons.file_download_outlined),
+                  onTap: () => _showSnack('Data export request submitted.'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SettingsCard(
+              title: 'Help',
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Contact support'),
+                  subtitle: const Text('support@rendivo.com'),
+                  trailing: const Icon(Icons.email_outlined),
+                  onTap: () => _showSnack('Support will reach out soon.'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -597,45 +793,154 @@ class _SettingsTab extends StatelessWidget {
    UI COMPONENTS (UNCHANGED LOOK)
    ========================= */
 
-class _ProfileRow extends StatelessWidget {
+class _ProfileReadOnlyField extends StatelessWidget {
   final String label;
   final String value;
 
-  const _ProfileRow({required this.label, required this.value});
+  const _ProfileReadOnlyField({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      initialValue: value,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+        filled: true,
+        fillColor: Colors.white,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: primaryPink),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+    );
+  }
+}
+
+class _PasswordCard extends StatelessWidget {
+  final VoidCallback onReset;
+
+  const _PasswordCard({required this.onReset});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+          const Text(
+            'Password reset',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Update your password to keep your account secure.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              onPressed: onReset,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: primaryPink,
+                side: const BorderSide(color: primaryPink),
               ),
+              child: const Text('Reset password'),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _SettingsCard({
+    required this.title,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsSwitchTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SettingsSwitchTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 12, color: Colors.grey),
+      ),
+      value: value,
+      activeColor: primaryPink,
+      onChanged: onChanged,
     );
   }
 }
@@ -688,11 +993,42 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _CalendarCard extends StatelessWidget {
-  const _CalendarCard();
+class _CalendarStrip extends StatelessWidget {
+  final _AppointmentLite? next;
+
+  const _CalendarStrip({this.next});
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _monthName(int month) {
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return (month >= 1 && month <= 12) ? names[month - 1] : '';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final nextDate = next?.startAt;
+    final days = List.generate(
+      7,
+      (index) => DateTime(today.year, today.month, today.day + index),
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
@@ -703,110 +1039,74 @@ class _CalendarCard extends StatelessWidget {
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Icon(Icons.chevron_left),
+            children: [
               Text(
-                'October 2024',
-                style: TextStyle(
+                '${_monthName(today.month)} ${today.year}',
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Icon(Icons.chevron_right),
+              if (nextDate != null)
+                Text(
+                  'Next: ${_monthName(nextDate.month)} ${nextDate.day}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              _CalendarDayHeader('Sun'),
-              _CalendarDayHeader('Mon'),
-              _CalendarDayHeader('Tue'),
-              _CalendarDayHeader('Wed'),
-              _CalendarDayHeader('Thu'),
-              _CalendarDayHeader('Fri'),
-              _CalendarDayHeader('Sat'),
-            ],
+            children: days.map((date) {
+              final labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              final label = labels[(date.weekday - 1) % 7];
+              final isSelected = nextDate != null && _isSameDay(date, nextDate);
+
+              return Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected ? primaryPink : const Color(0xFFF3F0F5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        date.day.toString(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 8),
-          const _CalendarNumberRow(numbers: ['29', '30', '1', '2', '3', '4', '5']),
-          const _CalendarNumberRow(numbers: ['6', '7', '8', '9', '10', '11', '12']),
-          const _CalendarNumberRow(numbers: ['13', '14', '15', '16', '17', '18', '19']),
-          const _CalendarNumberRow(
-            numbers: ['20', '21', '22', '23', '24', '25', '26'],
-            selectedIndex: 0,
-          ),
-          const _CalendarNumberRow(numbers: ['27', '28', '29', '30', '31', '1', '2']),
         ],
       ),
-    );
-  }
-}
-
-class _CalendarDayHeader extends StatelessWidget {
-  final String label;
-
-  const _CalendarDayHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 10,
-          color: Colors.grey,
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarNumberRow extends StatelessWidget {
-  final List<String> numbers;
-  final int? selectedIndex;
-
-  const _CalendarNumberRow({
-    required this.numbers,
-    this.selectedIndex,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(numbers.length, (index) {
-        final isSelected = selectedIndex == index;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: BoxDecoration(
-                color: isSelected ? primaryPink : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                numbers[index],
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  color: isSelected ? Colors.white : Colors.black,
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
     );
   }
 }
@@ -859,7 +1159,8 @@ class _AppointmentCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(dayLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(dayLabel,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 2),
                   Text(
                     dateNumber,
@@ -999,3 +1300,4 @@ class _DiscoverCard extends StatelessWidget {
     );
   }
 }
+

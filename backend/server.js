@@ -355,6 +355,84 @@ app.get('/api/businesses', async (_req, res) => {
   }
 });
 
+app.get('/api/businesses/me', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'business_owner') {
+      return res.status(403).json({ message: 'Business owner access only' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT 
+         b.*,
+         (
+           SELECT JSON_ARRAYAGG(
+             JSON_OBJECT(
+               'id', s.id,
+               'name', s.name,
+               'price', s.price,
+               'duration', s.duration,
+               'description', s.description
+             )
+           )
+           FROM services s
+           WHERE s.businessId = b.id AND s.isActive = 1
+         ) AS servicesJson,
+         (
+           SELECT JSON_ARRAYAGG(
+             JSON_OBJECT(
+               'id', sm.id,
+               'name', COALESCE(u.fullName, ''),
+               'role', COALESCE(sm.position, '')
+             )
+           )
+           FROM staff_members sm
+           LEFT JOIN users u ON sm.userId = u.id
+           WHERE sm.businessId = b.id AND sm.isActive = 1
+         ) AS staffJson
+       FROM businesses b
+       WHERE b.ownerId = ?
+         AND b.isActive = 1
+       ORDER BY b.createdAt DESC`,
+      [req.user.id]
+    );
+
+    const parseJsonArray = (value) => {
+      if (!value) return [];
+      try {
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') return JSON.parse(value);
+        if (Buffer.isBuffer(value)) return JSON.parse(value.toString());
+        return value;
+      } catch (_) {
+        return [];
+      }
+    };
+
+    const mapped = rows.map((row) => {
+      let services = [];
+      services = parseJsonArray(row.servicesJson);
+
+      let staff = [];
+      staff = parseJsonArray(row.staffJson);
+
+      return {
+        ...row,
+        services: Array.isArray(services)
+          ? services.filter((item) => item !== null)
+          : [],
+        staff: Array.isArray(staff)
+          ? staff.filter((item) => item !== null)
+          : [],
+      };
+    });
+
+    res.json(mapped);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Could not load owner businesses' });
+  }
+});
+
 app.get('/api/businesses/:id/services', async (req, res) => {
   try {
     const businessId = Number(req.params.id);
@@ -635,6 +713,118 @@ app.get('/api/appointments/me', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Could not load appointments' });
+  }
+});
+
+app.get('/api/staff/appointments', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'staff' && req.user.role !== 'business_owner') {
+      return res.status(403).json({ message: 'Staff access only' });
+    }
+
+    let staffMemberId;
+
+    if (req.user.role === 'staff') {
+      const [staffRows] = await pool.query(
+        'SELECT id FROM staff_members WHERE userId = ? AND isActive = 1 LIMIT 1',
+        [req.user.id]
+      );
+
+      if (!staffRows.length) {
+        return res.status(404).json({ message: 'Staff profile not found' });
+      }
+      staffMemberId = staffRows[0].id;
+    } else {
+      const requestedStaffId = Number(req.query.staffId);
+      if (Number.isFinite(requestedStaffId)) {
+        const [rows] = await pool.query(
+          `SELECT sm.id
+             FROM staff_members sm
+             JOIN businesses b ON sm.businessId = b.id
+            WHERE sm.id = ?
+              AND b.ownerId = ?
+              AND sm.isActive = 1
+            LIMIT 1`,
+          [requestedStaffId, req.user.id]
+        );
+        if (!rows.length) {
+          return res
+            .status(404)
+            .json({ message: 'Staff member not found for this owner.' });
+        }
+        staffMemberId = rows[0].id;
+      } else {
+        const [rows] = await pool.query(
+          `SELECT sm.id
+             FROM staff_members sm
+             JOIN businesses b ON sm.businessId = b.id
+            WHERE b.ownerId = ?
+              AND sm.isActive = 1
+            ORDER BY sm.joinedAt ASC, sm.id ASC
+            LIMIT 1`,
+          [req.user.id]
+        );
+
+        if (!rows.length) {
+          return res
+            .status(404)
+            .json({ message: 'No staff found for this owner.' });
+        }
+        staffMemberId = rows[0].id;
+      }
+    }
+
+    const [rows] = await pool.query(
+      `SELECT 
+          a.*,
+          b.businessName,
+          u.fullName AS customerName,
+          u.email AS customerEmail,
+          JSON_ARRAYAGG(
+            CASE 
+              WHEN sv.id IS NULL THEN NULL
+              ELSE JSON_OBJECT(
+                'id', sv.id,
+                'name', sv.name,
+                'price', sv.price,
+                'duration', sv.duration,
+                'description', sv.description
+              )
+            END
+          ) AS servicesJson
+       FROM appointments a
+       LEFT JOIN businesses b ON a.businessId = b.id
+       LEFT JOIN users u ON a.customerId = u.id
+       LEFT JOIN appointment_services aps ON aps.appointmentId = a.id
+       LEFT JOIN services sv ON sv.id = aps.serviceId
+       WHERE a.staffId = ?
+       GROUP BY a.id
+       ORDER BY a.appointmentDate DESC, a.startTime DESC`,
+      [staffMemberId]
+    );
+
+    const mapped = rows.map((row) => {
+      let services = [];
+      try {
+        if (row.servicesJson) {
+          const parsed = Array.isArray(row.servicesJson)
+            ? row.servicesJson
+            : JSON.parse(row.servicesJson);
+          services = Array.isArray(parsed)
+            ? parsed.filter((item) => item !== null)
+            : [];
+        }
+      } catch (_) {
+        services = [];
+      }
+
+      return { ...row, services };
+    });
+
+    res.json(mapped);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Could not load staff appointments' });
   }
 });
 

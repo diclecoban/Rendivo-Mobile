@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/app_models.dart';
@@ -21,7 +22,22 @@ class BackendService {
     _baseUrl = _normalizeBase(effectiveBase);
   }
 
-  static final BackendService instance = BackendService._();
+  factory BackendService.test({http.Client? client, String? baseUrl}) {
+    return BackendService._(client: client, baseUrl: baseUrl);
+  }
+
+  static BackendService? _singleton;
+  static BackendService? _testOverride;
+
+  static BackendService get instance {
+    _singleton ??= BackendService._();
+    return _testOverride ?? _singleton!;
+  }
+
+  @visibleForTesting
+  static void overrideForTesting(BackendService? service) {
+    _testOverride = service;
+  }
 
   final http.Client _client;
   final SessionService _session = SessionService.instance;
@@ -235,6 +251,48 @@ class BackendService {
             ),
           )
           .toList();
+    });
+  }
+
+  Future<List<Business>> fetchMyBusinesses() async {
+    final uri = Uri.parse('$_baseUrl/businesses/me');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <Business>[];
+      return jsonBody
+          .map((item) => Business.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    });
+  }
+
+  Future<List<Appointment>> fetchStaffAppointments({String? staffId}) async {
+    var uri = Uri.parse('$_baseUrl/staff/appointments');
+    if (staffId != null && staffId.isNotEmpty) {
+      uri = uri.replace(queryParameters: {'staffId': staffId});
+    }
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <Appointment>[];
+      return jsonBody
+          .map(
+            (item) => Appointment.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList();
+    });
+  }
+
+  Future<Map<String, dynamic>> fetchCustomerDashboard() async {
+    final uri = Uri.parse('$_baseUrl/customer/dashboard');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse<Map<String, dynamic>>(response, (jsonBody) {
+      if (jsonBody is Map<String, dynamic>) {
+        return jsonBody;
+      }
+      throw AppException('Unexpected response from dashboard endpoint.');
     });
   }
 

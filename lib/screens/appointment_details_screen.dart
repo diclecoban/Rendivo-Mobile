@@ -47,10 +47,13 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
     }
   }
 
+  int get _effectiveDurationMinutes =>
+      _appointment.totalDurationMinutes > 0 ? _appointment.totalDurationMinutes : 30;
+
   Future<void> _handleReschedule() async {
     final pickedDate = await showDatePicker(
       context: context,
-      initialDate: _appointment.startAt.add(const Duration(days: 1)),
+      initialDate: _appointment.startAt,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
@@ -70,15 +73,18 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
       pickedTime.minute,
     );
     final newEnd = newStart.add(
-      Duration(
-        minutes: _appointment.totalDurationMinutes > 0
-            ? _appointment.totalDurationMinutes
-            : 30,
-      ),
+      Duration(minutes: _effectiveDurationMinutes),
     );
 
     setState(() => _isActionInProgress = true);
     try {
+      final isAvailable = await _ensureSlotAvailable(newStart, newEnd);
+      if (!isAvailable) {
+        setState(() => _isActionInProgress = false);
+        _showSnack('Selected slot is no longer available. Please choose a different time.');
+        return;
+      }
+
       await BackendService.instance.rescheduleAppointment(
         appointmentId: _appointment.id,
         startAt: newStart,
@@ -100,6 +106,30 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
     } catch (e) {
       setState(() => _isActionInProgress = false);
       _showSnack('Failed to reschedule: $e');
+    }
+  }
+
+  Future<bool> _ensureSlotAvailable(DateTime start, DateTime end) async {
+    final businessId = _appointment.businessId;
+    if (businessId.isEmpty) {
+      return true;
+    }
+    try {
+      final slots = await BackendService.instance.fetchBusinessAvailability(
+        businessId: businessId,
+        date: start,
+        durationMinutes: _effectiveDurationMinutes,
+      );
+      bool sameMoment(DateTime a, DateTime b) =>
+          a.toUtc().difference(b.toUtc()).inSeconds.abs() < 1;
+
+      return slots.any(
+        (slot) => sameMoment(slot.startAt, start) && sameMoment(slot.endAt, end),
+      );
+    } catch (_) {
+      // In case of availability lookup failure, allow the request to proceed
+      // but notify user via UI.
+      return true;
     }
   }
 
@@ -199,6 +229,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
     final staffName = _appointment.staffName ?? 'Team Member';
     final services = _appointment.services;
     final status = _appointment.status;
+    final isCancelled = status.toLowerCase() == 'cancelled';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -389,7 +420,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
             width: double.infinity,
             height: 44,
             child: ElevatedButton(
-              onPressed: _isActionInProgress ? null : _handleReschedule,
+              onPressed: _isActionInProgress || isCancelled ? null : _handleReschedule,
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryPink,
                 shape: RoundedRectangleBorder(
@@ -433,7 +464,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
           const SizedBox(height: 8),
           Center(
             child: TextButton(
-              onPressed: _isActionInProgress ? null : _handleCancel,
+              onPressed: _isActionInProgress || isCancelled ? null : _handleCancel,
               child: const Text(
                 'Cancel Appointment',
                 style: TextStyle(

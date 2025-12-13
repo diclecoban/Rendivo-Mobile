@@ -29,6 +29,13 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
     'Makeup'
   ];
 
+  static const Map<String, List<String>> _categoryKeywords = {
+    'hair & beauty': ['hair', 'beauty', 'salon', 'barber'],
+    'spa & wellness': ['spa', 'wellness', 'relax'],
+    'nails': ['nail', 'manicure', 'pedicure'],
+    'makeup': ['makeup', 'cosmetic', 'artist'],
+  };
+
   List<Business> _businesses = [];
   List<Business> _filteredBusinesses = [];
 
@@ -48,19 +55,23 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
 
   Future<void> _loadBusinesses() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _error = null;
+        });
+      }
 
       final snapshot = await _backend.fetchBusinesses();
+      if (!mounted) return;
 
       setState(() {
         _businesses = snapshot;
-        _filteredBusinesses = snapshot;
+        _filteredBusinesses = _filterBusinesses(snapshot);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = 'Unable to load businesses: $e';
         _isLoading = false;
@@ -68,28 +79,45 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
     }
   }
 
-  void _applyFilters() {
+  List<Business> _filterBusinesses(List<Business> source) {
     final query = _searchController.text.toLowerCase().trim();
+    final normalizedCategory = _selectedCategory.toLowerCase();
 
+    bool matchesCategory(Business business) {
+      if (normalizedCategory == 'all') return true;
+      final type = business.businessType.toLowerCase();
+      final serviceTags = business.services
+          .map((service) => service.name.toLowerCase())
+          .join(' ');
+      final keywords = _categoryKeywords[normalizedCategory];
+      if (keywords != null && keywords.isNotEmpty) {
+        return keywords.any(
+          (keyword) => type.contains(keyword) || serviceTags.contains(keyword),
+        );
+      }
+      return type.contains(normalizedCategory);
+    }
+
+    return source.where((business) {
+      final name = business.businessName.toLowerCase();
+      final city = business.address.city.toLowerCase();
+      final tags = business.services
+          .map((service) => service.name.toLowerCase())
+          .join(' ');
+
+      final matchesQuery = query.isEmpty ||
+          name.contains(query) ||
+          city.contains(query) ||
+          tags.contains(query);
+
+      return matchesQuery && matchesCategory(business);
+    }).toList();
+  }
+
+  void _applyFilters() {
+    if (!mounted) return;
     setState(() {
-      _filteredBusinesses = _businesses.where((business) {
-        final name = business.businessName.toLowerCase();
-        final city = business.address.city.toLowerCase();
-        final tags = business.services
-            .map((service) => service.name.toLowerCase())
-            .join(' ');
-        final type = business.businessType.toLowerCase();
-
-        final matchesQuery = query.isEmpty ||
-            name.contains(query) ||
-            city.contains(query) ||
-            tags.contains(query);
-        final matchesCategory =
-            _selectedCategory == 'All' ||
-                type.contains(_selectedCategory.toLowerCase());
-
-        return matchesQuery && matchesCategory;
-      }).toList();
+      _filteredBusinesses = _filterBusinesses(_businesses);
     });
   }
 
@@ -132,6 +160,7 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
         child: RefreshIndicator(
           onRefresh: _onRefresh,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             children: [
               const SizedBox(height: 8),
@@ -287,114 +316,121 @@ class _BusinessCard extends StatelessWidget {
       business.address.state,
     ].where((value) => value.isNotEmpty).join(', ');
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            business.businessName,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (business.businessType.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              business.businessType,
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-          ],
-          if (addressParts.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.location_on_outlined,
-                    size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    addressParts,
-                    style: const TextStyle(fontSize: 13),
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                business.businessName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-          ],
-          if (business.phone.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.phone_outlined,
-                    size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 6),
+              ),
+              if (business.businessType.isNotEmpty) ...[
+                const SizedBox(height: 4),
                 Text(
-                  business.phone,
-                  style: const TextStyle(fontSize: 13),
+                  business.businessType,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
-            ),
-          ],
-          if (business.services.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: business.services.take(3).map((service) {
-                return Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF6E9F7),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    service.name,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF6B4D6D),
+              if (addressParts.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.location_on_outlined,
+                        size: 16, color: Colors.grey.shade600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        addressParts,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (business.phone.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.phone_outlined,
+                        size: 16, color: Colors.grey.shade600),
+                    const SizedBox(width: 6),
+                    Text(
+                      business.phone,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ],
+              if (business.services.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: business.services.take(3).map((service) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6E9F7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        service.name,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6B4D6D),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: onTap,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryPink,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryPink,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  child: const Text(
+                    'Book Now',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
-              child: const Text(
-                'Book Now',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

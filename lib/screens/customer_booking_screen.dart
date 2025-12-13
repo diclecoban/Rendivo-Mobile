@@ -30,12 +30,12 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   bool _slotsLoading = false;
   String? _slotsError;
   AvailabilitySlot? _selectedSlot;
+  String? _selectedStaffId;
 
   @override
   void initState() {
     super.initState();
     _loadServices();
-    _loadAvailability();
   }
 
   @override
@@ -62,6 +62,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         _isLoading = false;
       });
     }
+
+    await _loadAvailability();
   }
 
   List<ServiceItem> get _selectedServices =>
@@ -75,8 +77,30 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
   int get _effectiveDuration => _totalDuration > 0 ? _totalDuration : 30;
 
+  StaffMember? get _selectedStaffMember {
+    if (_selectedStaffId == null) return null;
+    try {
+      return widget.business.staff.firstWhere((member) => member.id == _selectedStaffId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _sameMoment(DateTime a, DateTime b) =>
+      a.toUtc().difference(b.toUtc()).inSeconds.abs() < 1;
+
   Future<void> _loadAvailability() async {
     if (!mounted) return;
+    if (_selectedServices.isEmpty) {
+      setState(() {
+        _slotsLoading = false;
+        _slotsError = null;
+        _availableSlots = [];
+        _selectedSlot = null;
+      });
+      return;
+    }
+
     setState(() {
       _slotsLoading = true;
       _slotsError = null;
@@ -153,7 +177,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         services: _selectedServices,
         startAt: slot.startAt,
         endAt: slot.endAt,
-        staff: null,
+        staff: _selectedStaffMember,
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
@@ -409,6 +433,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               const SizedBox(height: 12),
               _buildAvailabilitySection(),
               const SizedBox(height: 16),
+              _buildStaffPicker(),
+              if (widget.business.staff.isNotEmpty) const SizedBox(height: 16),
               TextField(
                 controller: _notesController,
                 maxLines: 3,
@@ -519,6 +545,16 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   }
 
   Widget _buildAvailabilitySection() {
+    if (_selectedServices.isEmpty) {
+      return const Text(
+        'Select at least one service to view available times.',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey,
+        ),
+      );
+    }
+
     if (_slotsLoading) {
       return const Center(
         child: Padding(
@@ -562,8 +598,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
       runSpacing: 8,
       children: _availableSlots.map((slot) {
         final isSelected = _selectedSlot != null &&
-            _selectedSlot!.startAt == slot.startAt &&
-            _selectedSlot!.endAt == slot.endAt;
+            _sameMoment(_selectedSlot!.startAt, slot.startAt) &&
+            _sameMoment(_selectedSlot!.endAt, slot.endAt);
         return ChoiceChip(
           label: Text(
             slot.label(),
@@ -588,6 +624,56 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildStaffPicker() {
+    if (widget.business.staff.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Preferred Staff',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String?>(
+          value: _selectedStaffId,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+          ),
+          hint: const Text('Any team member'),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('Any team member'),
+            ),
+            ...widget.business.staff.map(
+              (member) => DropdownMenuItem<String?>(
+                value: member.id,
+                child: Text(member.name),
+              ),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedStaffId = value;
+            });
+          },
+        ),
+      ],
     );
   }
 }

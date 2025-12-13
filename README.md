@@ -93,6 +93,7 @@ Varsayılan taban URL Android emülatörü için `http://10.0.2.2:5000/api`, di�
 
 ```bash
 flutter run --dart-define=API_BASE_URL=https://your-server.com/api
+flutter run --dart-define=API_BASE_URL='http://10.0.2.2:5000/api' mobil cihazlar için. 
 ```
 
 Genel geliştirme komutları:
