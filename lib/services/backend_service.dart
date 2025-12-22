@@ -183,6 +183,37 @@ class BackendService {
     });
   }
 
+  Future<AuthUser> registerStaff({
+    required String fullName,
+    required String email,
+    required String password,
+    required String businessId,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/register/staff');
+    final response = await _client.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'fullName': fullName,
+        'email': email,
+        'password': password,
+        'businessId': businessId,
+      }),
+    );
+
+    return _handleResponse(response, (jsonBody) {
+      final token = jsonBody['token'] as String?;
+      final user = AuthUser.fromJson(
+        Map<String, dynamic>.from(jsonBody['user'] as Map),
+        token: token,
+      );
+      _session
+        ..setUser(user)
+        ..setToken(token);
+      return user;
+    });
+  }
+
   // Businesses & services
   Future<List<Business>> fetchBusinesses() async {
     final uri = Uri.parse('$_baseUrl/businesses');
@@ -206,6 +237,26 @@ class BackendService {
           .map((item) => ServiceItem.fromJson(Map<String, dynamic>.from(item)))
           .toList();
     });
+  }
+
+  Future<Business> fetchBusinessById(String businessId) async {
+    final uri = Uri.parse('$_baseUrl/businesses/$businessId');
+    final response = await _client.get(uri, headers: _headers());
+    return _handleResponse(
+      response,
+      (jsonBody) => Business.fromJson(
+        Map<String, dynamic>.from(jsonBody as Map),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchBusinessDashboard() async {
+    final uri = Uri.parse('$_baseUrl/business/dashboard');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse(
+      response,
+      (jsonBody) => Map<String, dynamic>.from(jsonBody as Map),
+    );
   }
 
   // Owner service management

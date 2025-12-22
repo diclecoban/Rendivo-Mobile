@@ -58,8 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Widget targetScreen;
       switch (user.role) {
-        case 'owner':
-        case 'business':
+        case 'business_owner':
           targetScreen = const BusinessDashboardScreen();
           break;
         case 'staff':

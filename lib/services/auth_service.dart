@@ -28,5 +28,19 @@ class AuthService {
     );
   }
 
+  static Future<AuthUser> registerStaff({
+    required String fullName,
+    required String email,
+    required String password,
+    required String businessId,
+  }) async {
+    return _backend.registerStaff(
+      fullName: fullName,
+      email: email,
+      password: password,
+      businessId: businessId,
+    );
+  }
+
   static void signOut() => _session.clear();
 }

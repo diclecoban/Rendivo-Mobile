@@ -996,4 +996,3 @@ class _DiscoverCard extends StatelessWidget {
   }
 }
 
-

@@ -28,28 +28,32 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
   }
 
   Future<void> _loadBusiness() async {
+    final hasToken =
+        _session.authToken != null && _session.authToken!.isNotEmpty;
+    if (!hasToken) {
+      setState(() {
+        _error = 'Please sign in to view your business dashboard.';
+        _loading = false;
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final businesses = await _backend.fetchBusinesses();
-
-      // If user is logged in, try to pick business by email match; otherwise pick first.
-      final email = _session.currentEmail?.toLowerCase();
-      Business? match;
-      if (email != null) {
-        match = businesses
-            .where((b) => b.email.toLowerCase() == email)
-            .toList()
-            .cast<Business?>()
-            .firstOrNull;
+      final dashboard = await _backend.fetchBusinessDashboard();
+      final businessMap = dashboard['business'] as Map?;
+      final businessId = businessMap?['id']?.toString();
+      if (businessId == null || businessId.isEmpty) {
+        throw Exception('Business not found for this account.');
       }
-      match ??= businesses.isNotEmpty ? businesses.first : null;
 
+      final business = await _backend.fetchBusinessById(businessId);
       setState(() {
-        _business = match;
+        _business = business;
       });
     } catch (e) {
       setState(() {
@@ -426,8 +430,4 @@ class _StaffRow extends StatelessWidget {
       ],
     );
   }
-}
-
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

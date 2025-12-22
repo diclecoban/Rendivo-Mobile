@@ -101,10 +101,25 @@ class StaffMember {
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] is Map
+        ? Map<String, dynamic>.from(json['user'] as Map)
+        : null;
+    String resolveName() {
+      if (user != null) {
+        final full = (user['fullName'] ?? '').toString().trim();
+        if (full.isNotEmpty) return full;
+        final first = (user['firstName'] ?? '').toString().trim();
+        final last = (user['lastName'] ?? '').toString().trim();
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+      return (json['name'] ?? '').toString();
+    }
+
     return StaffMember(
       id: (json['id'] ?? '').toString(),
-      name: json['name'] ?? '',
-      role: json['role'] ?? '',
+      name: resolveName(),
+      role: (json['position'] ?? json['role'] ?? '').toString(),
     );
   }
 }
@@ -137,6 +152,12 @@ class Business {
                 ))
             .toList() ??
         [];
+    final staffList = (json['staff'] as List?)
+            ?.map((item) => StaffMember.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList() ??
+        [];
     return Business(
       id: (json['id'] ?? json['businessId'] ?? '').toString(),
       businessName: json['businessName'] ?? json['name'] ?? '',
@@ -150,12 +171,7 @@ class Business {
         postalCode: json['zipCode'] ?? json['postalCode'] ?? '',
       ),
       services: serviceList,
-      staff: (json['staff'] as List?)
-              ?.map((item) => StaffMember.fromJson(
-                    Map<String, dynamic>.from(item as Map),
-                  ))
-              .toList() ??
-          [],
+      staff: staffList,
     );
   }
 
@@ -223,6 +239,19 @@ class Appointment {
             .toList() ??
         [];
 
+    final business = json['business'] is Map
+        ? Map<String, dynamic>.from(json['business'] as Map)
+        : null;
+    final customer = json['customer'] is Map
+        ? Map<String, dynamic>.from(json['customer'] as Map)
+        : null;
+    final staff = json['staff'] is Map
+        ? Map<String, dynamic>.from(json['staff'] as Map)
+        : null;
+    final staffUser = staff?['user'] is Map
+        ? Map<String, dynamic>.from(staff?['user'] as Map)
+        : null;
+
     final appointmentDate = json['appointmentDate'] ?? json['date'];
     final startTime = json['startTime'] ?? json['start_at'];
     final endTime = json['endTime'] ?? json['end_at'];
@@ -240,13 +269,41 @@ class Appointment {
         json['totalDurationMinutes'] ??
         json['total_duration'];
 
+    String resolveCustomerName() {
+      if (customer != null) {
+        final full = (customer['fullName'] ?? '').toString().trim();
+        if (full.isNotEmpty) return full;
+        final first = (customer['firstName'] ?? '').toString().trim();
+        final last = (customer['lastName'] ?? '').toString().trim();
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+      return (json['customerName'] ?? '').toString();
+    }
+
+    String resolveStaffName() {
+      if (staffUser != null) {
+        final full = (staffUser['fullName'] ?? '').toString().trim();
+        if (full.isNotEmpty) return full;
+        final first = (staffUser['firstName'] ?? '').toString().trim();
+        final last = (staffUser['lastName'] ?? '').toString().trim();
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+      return (json['staffName'] ?? json['staffPosition'] ?? '').toString();
+    }
+
     return Appointment(
       id: (json['id'] ?? '').toString(),
-      businessId: (json['businessId'] ?? '').toString(),
-      businessName: json['businessName'] ?? '',
-      customerId: (json['customerId'] ?? '').toString(),
-      customerName: json['customerName'] ?? '',
-      customerEmail: json['customerEmail'] ?? '',
+      businessId:
+          (json['businessId'] ?? business?['id'] ?? '').toString(),
+      businessName: json['businessName'] ??
+          (business?['businessName'] ?? '').toString(),
+      customerId:
+          (json['customerId'] ?? customer?['id'] ?? '').toString(),
+      customerName: resolveCustomerName(),
+      customerEmail:
+          (json['customerEmail'] ?? customer?['email'] ?? '').toString(),
       services: servicesJson,
       totalPrice: (json['totalPrice'] is int)
           ? (json['totalPrice'] as int).toDouble()
@@ -261,8 +318,8 @@ class Appointment {
       status: json['status'] ?? 'pending',
       startAt: parseDateTime(appointmentDate, startTime),
       endAt: parseDateTime(appointmentDate, endTime),
-      staffId: json['staffId']?.toString(),
-      staffName: json['staffName'] ?? json['staffPosition'],
+      staffId: (json['staffId'] ?? staff?['id'])?.toString(),
+      staffName: resolveStaffName(),
       notes: json['notes'] ?? '',
     );
   }
