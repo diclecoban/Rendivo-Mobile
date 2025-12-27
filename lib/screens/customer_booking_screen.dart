@@ -30,6 +30,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   Set<String> _bookedDays = {};
   Map<String, List<AvailabilitySlot>> _bookedSlotsByDate = {};
+  Map<String, List<AvailabilitySlot>> _shiftSlotsByDate = {};
   DateTime? _selectedSlotStart;
   bool _availabilityLoading = false;
   String? _availabilityError;
@@ -90,9 +91,15 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         final key = _formatDateKey(slot.startAt);
         map.putIfAbsent(key, () => []).add(slot);
       }
+      final shiftMap = <String, List<AvailabilitySlot>>{};
+      for (final slot in availability.shiftSlots) {
+        final key = _formatDateKey(slot.startAt);
+        shiftMap.putIfAbsent(key, () => []).add(slot);
+      }
       setState(() {
         _bookedDays = availability.bookedDays.toSet();
         _bookedSlotsByDate = map;
+        _shiftSlotsByDate = shiftMap;
         _focusedMonth = month;
         final availSlots = _availableSlotsForDay(_selectedDate);
         _selectedSlotStart = availSlots.isNotEmpty ? availSlots.first : null;
@@ -131,14 +138,36 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     return _bookedSlotsByDate[_formatDateKey(date)] ?? [];
   }
 
+  List<AvailabilitySlot> _shiftSlotsForDate(DateTime date) {
+    return _shiftSlotsByDate[_formatDateKey(date)] ?? [];
+  }
+
   List<DateTime> _standardSlotsForDay(DateTime date) {
-    final start = DateTime(date.year, date.month, date.day, 9);
-    final end = DateTime(date.year, date.month, date.day, 18);
+    final shifts = _shiftSlotsForDate(date);
+    if (shifts.isEmpty) return [];
+
     final slots = <DateTime>[];
-    var cursor = start;
-    while (cursor.isBefore(end)) {
-      slots.add(cursor);
-      cursor = cursor.add(const Duration(minutes: 30));
+    for (final shift in shifts) {
+      final start = shift.startAt.toLocal();
+      final end = shift.endAt.toLocal();
+      var cursor = DateTime(
+        start.year,
+        start.month,
+        start.day,
+        start.hour,
+        start.minute,
+      );
+      final limit = DateTime(
+        end.year,
+        end.month,
+        end.day,
+        end.hour,
+        end.minute,
+      );
+      while (cursor.isBefore(limit)) {
+        slots.add(cursor);
+        cursor = cursor.add(const Duration(minutes: 30));
+      }
     }
     return slots;
   }
@@ -547,6 +576,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               final inMonth = day.month == _focusedMonth.month;
               final dateKey = _formatDateKey(day);
               final isBooked = _bookedDays.contains(dateKey);
+              final hasShift = _shiftSlotsForDate(day).isNotEmpty;
               final hasAvailability = _availableSlotsForDay(day).isNotEmpty;
               final isFullyBooked = isBooked && !hasAvailability;
               final isSelected =
@@ -559,7 +589,11 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               Color borderColor = Colors.grey.shade300;
               Color textColor = inMonth ? Colors.black : Colors.grey.shade400;
 
-              if (isFullyBooked) {
+              if (!hasShift) {
+                bgColor = const Color(0xFFF3F3F3);
+                borderColor = Colors.grey.shade300;
+                textColor = Colors.grey.shade500;
+              } else if (isFullyBooked) {
                 bgColor = const Color(0xFFFFEFEF);
                 borderColor = Colors.redAccent.withOpacity(0.6);
                 textColor = Colors.redAccent;
@@ -571,7 +605,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
               return GestureDetector(
                 onTap: () async {
-                  if (!inMonth || isFullyBooked) return;
+                  if (!inMonth || isFullyBooked || !hasShift) return;
                   final monthChanged = day.month != _focusedMonth.month;
                   setState(() {
                     _selectedDate = day;

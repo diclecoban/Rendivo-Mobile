@@ -622,6 +622,7 @@ class BusinessAvailability {
   final String endDate;
   final List<String> bookedDays;
   final List<AvailabilitySlot> bookedSlots;
+  final List<AvailabilitySlot> shiftSlots;
 
   const BusinessAvailability({
     required this.businessId,
@@ -629,10 +630,17 @@ class BusinessAvailability {
     required this.endDate,
     required this.bookedDays,
     required this.bookedSlots,
+    required this.shiftSlots,
   });
 
   factory BusinessAvailability.fromJson(Map<String, dynamic> json) {
     final slots = (json['bookedSlots'] as List?)
+            ?.map((item) => AvailabilitySlot.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList() ??
+        <AvailabilitySlot>[];
+    final shifts = (json['shiftSlots'] as List?)
             ?.map((item) => AvailabilitySlot.fromJson(
                   Map<String, dynamic>.from(item as Map),
                 ))
@@ -647,6 +655,7 @@ class BusinessAvailability {
       endDate: (json['endDate'] ?? '').toString(),
       bookedDays: days,
       bookedSlots: slots,
+      shiftSlots: shifts,
     );
   }
 }

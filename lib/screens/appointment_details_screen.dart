@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
+import 'appointment_reschedule_screen.dart';
 
 class AppointmentDetailsScreen extends StatefulWidget {
   final Appointment appointment;
@@ -48,34 +49,19 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
   }
 
   Future<void> _handleReschedule() async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _appointment.startAt.add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (pickedDate == null) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_appointment.startAt),
-    );
-    if (pickedTime == null) return;
-
-    final newStart = DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    );
-    final newEnd = newStart.add(
-      Duration(
-        minutes: _appointment.totalDurationMinutes > 0
-            ? _appointment.totalDurationMinutes
-            : 30,
+    final result = await Navigator.push<Map<String, DateTime>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppointmentRescheduleScreen(
+          appointment: _appointment,
+        ),
       ),
     );
+    if (result == null) return;
+
+    final newStart = result['startAt'];
+    final newEnd = result['endAt'];
+    if (newStart == null || newEnd == null) return;
 
     setState(() => _isActionInProgress = true);
     try {
@@ -158,6 +144,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
       SnackBar(content: Text(message)),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

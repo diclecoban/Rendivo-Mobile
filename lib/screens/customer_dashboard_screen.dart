@@ -27,6 +27,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
     final tabs = <Widget>[
       _DashboardHome(session: _session),
       const CustomerDiscoverScreen(),
+      const CustomerAppointmentsScreen(),
     ];
 
     return Scaffold(
@@ -45,6 +46,10 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.explore_outlined),
             label: 'Discover',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event_note_outlined),
+            label: 'Appointments',
           ),
         ],
         onTap: (index) => setState(() => _currentIndex = index),
