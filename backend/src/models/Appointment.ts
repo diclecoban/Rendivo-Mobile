@@ -100,7 +100,7 @@ Appointment.init(
     status: {
       type: DataTypes.ENUM(...Object.values(AppointmentStatus)),
       allowNull: false,
-      defaultValue: AppointmentStatus.PENDING,
+      defaultValue: AppointmentStatus.CONFIRMED,
     },
     notes: {
       type: DataTypes.TEXT,

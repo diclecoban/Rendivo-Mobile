@@ -433,6 +433,93 @@ class BackendService {
     });
   }
 
+  // Shifts
+  Future<List<ShiftItem>> fetchBusinessShifts({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/shifts').replace(queryParameters: {
+      'startDate': _formatDate(startDate),
+      'endDate': _formatDate(endDate),
+    });
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <ShiftItem>[];
+      return jsonBody
+          .map((item) => ShiftItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<List<StaffMember>> fetchShiftStaffMembers() async {
+    final uri = Uri.parse('$_baseUrl/shifts/staff-members');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <StaffMember>[];
+      return jsonBody
+          .map((item) => StaffMember.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<ShiftItem> createShift({
+    required String staffId,
+    required DateTime shiftDate,
+    required String startTime,
+    required String endTime,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/shifts');
+    final response = await _client.post(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'staffId': int.tryParse(staffId) ?? staffId,
+        'shiftDate': _formatDate(shiftDate),
+        'startTime': startTime,
+        'endTime': endTime,
+      }),
+    );
+    return _handleResponse(
+      response,
+      (jsonBody) =>
+          ShiftItem.fromJson(Map<String, dynamic>.from(jsonBody as Map)),
+    );
+  }
+
+  Future<ShiftItem> updateShift({
+    required String shiftId,
+    required String staffId,
+    required DateTime shiftDate,
+    required String startTime,
+    required String endTime,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/shifts/$shiftId');
+    final response = await _client.put(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'staffId': int.tryParse(staffId) ?? staffId,
+        'shiftDate': _formatDate(shiftDate),
+        'startTime': startTime,
+        'endTime': endTime,
+      }),
+    );
+    return _handleResponse(
+      response,
+      (jsonBody) =>
+          ShiftItem.fromJson(Map<String, dynamic>.from(jsonBody as Map)),
+    );
+  }
+
+  Future<void> deleteShift(String shiftId) async {
+    final uri = Uri.parse('$_baseUrl/shifts/$shiftId');
+    final response = await _client.delete(
+      uri,
+      headers: _headers(withAuth: true),
+    );
+    _handleResponse(response, (_) => null);
+  }
+
   // Appointments
   Future<List<Appointment>> fetchCustomerAppointments() {
     return fetchAppointments();

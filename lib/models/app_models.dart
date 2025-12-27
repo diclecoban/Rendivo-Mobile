@@ -420,7 +420,7 @@ class Appointment {
       totalDurationMinutes: durationRaw is num
           ? durationRaw.toInt()
           : int.tryParse(durationRaw?.toString() ?? '') ?? 0,
-      status: json['status'] ?? 'pending',
+      status: json['status'] ?? 'confirmed',
       startAt: parseDateTime(appointmentDate, startTime),
       endAt: parseDateTime(appointmentDate, endTime),
       staffId: (json['staffId'] ?? staff?['id'])?.toString(),
@@ -451,6 +451,54 @@ class Appointment {
       staffId: staffId,
       staffName: staffName,
       notes: notes ?? this.notes,
+    );
+  }
+}
+
+class ShiftItem {
+  final String id;
+  final String staffId;
+  final String shiftDate;
+  final String startTime;
+  final String endTime;
+  final String staffName;
+
+  const ShiftItem({
+    required this.id,
+    required this.staffId,
+    required this.shiftDate,
+    required this.startTime,
+    required this.endTime,
+    required this.staffName,
+  });
+
+  factory ShiftItem.fromJson(Map<String, dynamic> json) {
+    final staff = json['staff'] is Map
+        ? Map<String, dynamic>.from(json['staff'] as Map)
+        : null;
+    final staffUser = staff?['user'] is Map
+        ? Map<String, dynamic>.from(staff?['user'] as Map)
+        : null;
+
+    String resolveStaffName() {
+      if (staffUser != null) {
+        final full = (staffUser['fullName'] ?? '').toString().trim();
+        if (full.isNotEmpty) return full;
+        final first = (staffUser['firstName'] ?? '').toString().trim();
+        final last = (staffUser['lastName'] ?? '').toString().trim();
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) return combined;
+      }
+      return (json['staffName'] ?? 'Staff').toString();
+    }
+
+    return ShiftItem(
+      id: (json['id'] ?? '').toString(),
+      staffId: (json['staffId'] ?? staff?['id'] ?? '').toString(),
+      shiftDate: (json['shiftDate'] ?? '').toString(),
+      startTime: (json['startTime'] ?? '').toString(),
+      endTime: (json['endTime'] ?? '').toString(),
+      staffName: resolveStaffName(),
     );
   }
 }

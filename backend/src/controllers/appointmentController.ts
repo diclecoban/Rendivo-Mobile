@@ -52,7 +52,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
       endTime,
       totalPrice,
       totalDuration,
-      status: AppointmentStatus.PENDING,
+      status: AppointmentStatus.CONFIRMED,
       notes,
     });
 

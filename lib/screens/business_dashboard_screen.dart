@@ -5,7 +5,9 @@ import '../models/app_models.dart';
 import '../services/backend_service.dart';
 import '../services/auth_service.dart';
 import '../services/session_service.dart';
+import 'business_schedule_screen.dart';
 import 'login_screen.dart';
+import '../widgets/business_bottom_nav.dart';
 
 class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
@@ -112,6 +114,26 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                   user: user,
                 ),
         ),
+      ),
+      bottomNavigationBar: BusinessBottomNav(
+        currentIndex: 0,
+        isPending: _requiresApproval,
+        onTap: (index) {
+          if (index == 3) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessScheduleScreen(
+                  isPending: _requiresApproval,
+                ),
+              ),
+            );
+          } else if (index == 1 || index == 2) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Coming soon.')),
+            );
+          }
+        },
       ),
     );
   }
@@ -476,7 +498,59 @@ class _DashboardContent extends StatelessWidget {
                               fontSize: 12,
                               color: Colors.grey,
                             ),
-                          ),
+                      ),
+          ),
+          const SizedBox(height: 16),
+          const _SectionTitle('Schedule'),
+          const SizedBox(height: 8),
+          _CardContainer(
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: primaryPink.withOpacity(0.15),
+                  child: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 18,
+                    color: primaryPink,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Manage staff shifts and availability.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: loading
+                      ? null
+                      : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BusinessScheduleScreen(),
+                            ),
+                          );
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryPink,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Open',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           const _SectionTitle('Staff'),

@@ -88,7 +88,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
         _appointment = _appointment.copyWith(
           startAt: newStart,
           endAt: newEnd,
-          status: 'pending',
+          status: 'confirmed',
         );
         _isActionInProgress = false;
         _hasChanges = true;
