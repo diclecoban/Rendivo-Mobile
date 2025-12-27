@@ -394,24 +394,6 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CustomerAppointmentsScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'View all',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: primaryPink,
-                      ),
-                    ),
-                  ),
                 ],
               ),
 
@@ -445,17 +427,28 @@ class _DashboardHomeState extends State<_DashboardHome> {
                             ),
                           ),
                           Expanded(
-                            child: Container(
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: const Text(
-                                'Booking History',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const CustomerAppointmentsScreen(),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  'Booking History',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
                             ),
@@ -674,15 +667,21 @@ class _CalendarCard extends StatelessWidget {
               Color borderColor = Colors.grey.shade300;
               Color textColor = Colors.black87;
 
-              if (isSelected) {
-                bgColor = primaryPink.withOpacity(0.12);
+              if (hasBooking) {
+                bgColor = primaryPink;
                 borderColor = primaryPink;
-                textColor = primaryPink;
-              } else if (isPast) {
+                textColor = Colors.white;
+              }
+
+              if (isSelected) {
+                bgColor = hasBooking ? primaryPink : primaryPink.withOpacity(0.12);
+                borderColor = primaryPink;
+                textColor = hasBooking ? Colors.white : primaryPink;
+              } else if (isPast && !hasBooking) {
                 bgColor = const Color(0xFFF3F3F3);
                 borderColor = Colors.grey.shade300;
                 textColor = Colors.grey.shade500;
-              } else if (isToday) {
+              } else if (isToday && !hasBooking) {
                 bgColor = const Color(0xFFF4F7FF);
                 borderColor = const Color(0xFFB2C2FF);
                 textColor = const Color(0xFF3755B7);
@@ -708,16 +707,6 @@ class _CalendarCard extends StatelessWidget {
                           color: textColor,
                         ),
                       ),
-                      if (hasBooking)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: primaryPink,
-                          ),
-                        ),
                     ],
                   ),
                 ),
