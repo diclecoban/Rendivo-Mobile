@@ -26,6 +26,14 @@ class _EmailVerificationCodeScreenState
   bool _verified = false;
   AutovalidateMode _autoValidateMode = AutovalidateMode.disabled;
 
+  void _navigateToLogin() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -79,13 +87,19 @@ class _EmailVerificationCodeScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: _verified ? _buildSuccess(context) : _buildForm(),
+    return WillPopScope(
+      onWillPop: () async {
+        _navigateToLogin();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: _verified ? _buildSuccess(context) : _buildForm(),
+            ),
           ),
         ),
       ),
@@ -229,7 +243,7 @@ class _EmailVerificationCodeScreenState
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _navigateToLogin,
               child: const Text(
                 'Back',
                 style: TextStyle(
