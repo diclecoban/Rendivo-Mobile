@@ -5,6 +5,7 @@ import '../models/app_models.dart';
 import '../services/backend_service.dart';
 import '../services/session_service.dart';
 import 'appointment_details_screen.dart';
+import 'appointment_reschedule_screen.dart';
 
 class CustomerAppointmentsScreen extends StatefulWidget {
   const CustomerAppointmentsScreen({super.key});
@@ -84,30 +85,19 @@ class _CustomerAppointmentsScreenState
   }
 
   Future<void> _rescheduleAppointment(Appointment appointment) async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: appointment.startAt,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+    final result = await Navigator.push<Map<String, DateTime>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppointmentRescheduleScreen(
+          appointment: appointment,
+        ),
+      ),
     );
-    if (pickedDate == null) return;
+    if (result == null) return;
 
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(appointment.startAt),
-    );
-    if (pickedTime == null) return;
-
-    final newStart = DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    );
-    final minutes =
-        appointment.totalDurationMinutes > 0 ? appointment.totalDurationMinutes : 30;
-    final newEnd = newStart.add(Duration(minutes: minutes));
+    final newStart = result['startAt'];
+    final newEnd = result['endAt'];
+    if (newStart == null || newEnd == null) return;
 
     try {
       await _backend.rescheduleAppointment(

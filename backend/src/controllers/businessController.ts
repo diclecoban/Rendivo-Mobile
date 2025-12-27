@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { Business, User, StaffMember, Service, Appointment } from '../models';
+import { Business, User, StaffMember, Service, Appointment, Shift } from '../models';
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 
@@ -354,5 +354,69 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
   } catch (error: any) {
     console.error('Get business dashboard error:', error);
     res.status(500).json({ message: 'Error fetching dashboard data', error: error.message });
+  }
+};
+
+// Get availability data for a business (public route for booking)
+export const getBusinessAvailability = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const whereClause: any = {
+      businessId: id,
+      status: { [Op.in]: ['confirmed', 'completed'] },
+    };
+
+    if (startDate && endDate) {
+      whereClause.appointmentDate = {
+        [Op.between]: [startDate as string, endDate as string],
+      };
+    }
+
+    const appointments = await Appointment.findAll({
+      where: whereClause,
+      attributes: ['appointmentDate', 'startTime', 'endTime'],
+    });
+
+    const shiftWhere: any = {
+      businessId: id,
+    };
+    if (startDate && endDate) {
+      shiftWhere.shiftDate = {
+        [Op.between]: [startDate as string, endDate as string],
+      };
+    }
+
+    const shifts = await Shift.findAll({
+      where: shiftWhere,
+      attributes: ['shiftDate', 'startTime', 'endTime'],
+    });
+
+    const bookedDays = Array.from(
+      new Set(appointments.map((apt) => apt.appointmentDate.toString()))
+    );
+
+    const bookedSlots = appointments.map((apt) => ({
+      startAt: `${apt.appointmentDate}T${apt.startTime}`,
+      endAt: `${apt.appointmentDate}T${apt.endTime}`,
+    }));
+
+    const shiftSlots = shifts.map((shift) => ({
+      startAt: `${shift.shiftDate}T${shift.startTime}`,
+      endAt: `${shift.shiftDate}T${shift.endTime}`,
+    }));
+
+    res.json({
+      businessId: id,
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
+      bookedDays,
+      bookedSlots,
+      shiftSlots,
+    });
+  } catch (error: any) {
+    console.error('Get business availability error:', error);
+    res.status(500).json({ message: 'Error fetching availability', error: error.message });
   }
 };
