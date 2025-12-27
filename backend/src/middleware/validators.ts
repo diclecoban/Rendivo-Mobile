@@ -32,3 +32,13 @@ export const firebaseAuthValidation = [
   body('firebaseToken').notEmpty().withMessage('Firebase token is required'),
   body('role').isIn(['customer', 'staff', 'business_owner']).withMessage('Valid role is required'),
 ];
+
+export const passwordResetRequestValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+];
+
+export const passwordResetConfirmValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('code').isLength({ min: 4 }).withMessage('Reset code is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+];

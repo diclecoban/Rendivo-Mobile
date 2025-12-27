@@ -9,13 +9,9 @@ import {
   updateAppointmentStatus,
   cancelAppointment,
   rescheduleAppointment,
-  getBusinessAvailability,
 } from '../controllers/appointmentController';
 
 const router = express.Router();
-
-// Public availability endpoint
-router.get('/businesses/:businessId/availability', getBusinessAvailability);
 
 // All routes are protected
 router.post('/appointments', authenticate, createAppointment);

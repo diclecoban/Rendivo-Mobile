@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
+import '../services/auth_service.dart';
 import '../services/session_service.dart';
+import 'login_screen.dart';
 
 class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
@@ -313,6 +315,16 @@ class _DashboardContent extends StatelessWidget {
     required this.user,
   });
 
+  Future<void> _logout(BuildContext context) async {
+    AuthService.signOut();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -354,18 +366,41 @@ class _DashboardContent extends StatelessWidget {
                 onPressed: () {},
                 icon: const Icon(Icons.notifications_none_rounded),
               ),
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: primaryPink,
-                child: Text(
-                  (business?.businessName.isNotEmpty ?? false)
-                      ? business!.businessName[0].toUpperCase()
-                      : (user?.fullName.isNotEmpty ?? false)
-                          ? user!.fullName[0].toUpperCase()
-                          : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'logout') {
+                    _logout(context);
+                  }
+                },
+                offset: const Offset(0, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Text(
+                      'Log out',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                ],
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: primaryPink,
+                  child: Text(
+                    (business?.businessName.isNotEmpty ?? false)
+                        ? business!.businessName[0].toUpperCase()
+                        : (user?.fullName.isNotEmpty ?? false)
+                            ? user!.fullName[0].toUpperCase()
+                            : '?',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -398,6 +433,13 @@ class _DashboardContent extends StatelessWidget {
             title: 'Contact',
             mainValue: business?.phone.isNotEmpty == true ? business!.phone : '-',
             trendText: business?.email ?? '',
+            trendColor: Colors.grey,
+          ),
+          const SizedBox(height: 12),
+          _KpiCard(
+            title: 'Business ID',
+            mainValue: business?.id.isNotEmpty == true ? business!.id : '-',
+            trendText: 'Internal business id',
             trendColor: Colors.grey,
           ),
           const SizedBox(height: 16),

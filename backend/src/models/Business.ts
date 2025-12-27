@@ -1,10 +1,11 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 
-export enum BusinessApprovalStatus {
+// Business approval status
+export enum ApprovalStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
-  REJECTED = 'rejected',
+  REJECTED = 'rejected'
 }
 
 // Business attributes interface
@@ -24,21 +25,14 @@ export interface BusinessAttributes {
   website?: string;
   logo?: string;
   businessId: string; // Unique business identifier for staff to join
+  approvalStatus: ApprovalStatus;
+  approvedAt?: Date;
   isActive: boolean;
-  approvalStatus: BusinessApprovalStatus;
-  approvedAt?: Date | null;
-  rejectedAt?: Date | null;
-  reviewedBy?: number | null;
-  reviewNotes?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface BusinessCreationAttributes
-  extends Optional<
-    BusinessAttributes,
-    'id' | 'businessId' | 'isActive' | 'approvalStatus' | 'approvedAt' | 'rejectedAt' | 'reviewedBy' | 'reviewNotes'
-  > {}
+interface BusinessCreationAttributes extends Optional<BusinessAttributes, 'id' | 'businessId' | 'isActive' | 'approvalStatus'> {}
 
 // Business Model
 class Business extends Model<BusinessAttributes, BusinessCreationAttributes> implements BusinessAttributes {
@@ -57,12 +51,9 @@ class Business extends Model<BusinessAttributes, BusinessCreationAttributes> imp
   public website?: string;
   public logo?: string;
   public businessId!: string;
+  public approvalStatus!: ApprovalStatus;
+  public approvedAt?: Date;
   public isActive!: boolean;
-  public approvalStatus!: BusinessApprovalStatus;
-  public approvedAt?: Date | null;
-  public rejectedAt?: Date | null;
-  public reviewedBy?: number | null;
-  public reviewNotes?: string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -137,35 +128,19 @@ Business.init(
       unique: true,
       defaultValue: () => `BIZ${Date.now()}${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
     },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
     approvalStatus: {
-      type: DataTypes.ENUM(...Object.values(BusinessApprovalStatus)),
+      type: DataTypes.ENUM('pending', 'approved', 'rejected'),
       allowNull: false,
-      defaultValue: BusinessApprovalStatus.PENDING,
+      defaultValue: 'pending',
     },
     approvedAt: {
       type: DataTypes.DATE,
       allowNull: true,
     },
-    rejectedAt: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    reviewedBy: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id',
-      },
-    },
-    reviewNotes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
   },
   {
@@ -183,14 +158,6 @@ Business.init(
         // Double-check business ID exists before creation
         if (!business.businessId) {
           business.businessId = `BIZ${Date.now()}${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-        }
-        if (business.approvalStatus !== BusinessApprovalStatus.APPROVED) {
-          business.isActive = false;
-        }
-      },
-      beforeUpdate: (business: Business) => {
-        if (business.approvalStatus !== BusinessApprovalStatus.APPROVED) {
-          business.isActive = false;
         }
       },
     },

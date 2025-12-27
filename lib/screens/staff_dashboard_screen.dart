@@ -158,7 +158,6 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
       _buildDashboardTab(user),
       _buildBookingsTab(),
       _buildAvailabilityTab(),
-      _buildSettingsTab(user),
     ];
 
     return Scaffold(
@@ -181,10 +180,6 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.access_time_outlined),
             label: 'Availability',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
           ),
         ],
         onTap: (index) => setState(() => _currentIndex = index),
@@ -232,16 +227,45 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                     ],
                   ),
                 ),
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: primaryPink,
-                  child: Text(
-                    (user?.fullName.isNotEmpty ?? false)
-                        ? user!.fullName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      AuthService.signOut();
+                      if (!mounted) return;
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  offset: const Offset(0, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Text(
+                        'Log out',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ),
+                  ],
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: primaryPink,
+                    child: Text(
+                      (user?.fullName.isNotEmpty ?? false)
+                          ? user!.fullName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -436,97 +460,6 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSettingsTab(AuthUser? user) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      children: [
-        const Text(
-          'Settings',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user?.fullName ?? 'Staff Member',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                user?.email ?? '',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Role', style: TextStyle(fontSize: 12)),
-                  Text(
-                    user?.role ?? 'staff',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: ElevatedButton(
-            onPressed: () async {
-              AuthService.signOut();
-              if (!mounted) return;
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Log Out',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

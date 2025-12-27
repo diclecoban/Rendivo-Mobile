@@ -7,6 +7,10 @@ import {
   firebaseAuth,
   getProfile,
   logout,
+  verifyEmail,
+  resendVerification,
+  requestPasswordReset,
+  confirmPasswordReset,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validation';
@@ -16,6 +20,8 @@ import {
   registerBusinessValidation,
   loginValidation,
   firebaseAuthValidation,
+  passwordResetRequestValidation,
+  passwordResetConfirmValidation,
 } from '../middleware/validators';
 
 const router = express.Router();
@@ -25,6 +31,21 @@ router.post('/register/customer', validate(registerCustomerValidation), register
 router.post('/register/staff', validate(registerStaffValidation), registerStaff);
 router.post('/register/business', validate(registerBusinessValidation), registerBusiness);
 router.post('/login', validate(loginValidation), login);
+router.post(
+  '/password/reset/request',
+  validate(passwordResetRequestValidation),
+  requestPasswordReset
+);
+router.post(
+  '/password/reset/confirm',
+  validate(passwordResetConfirmValidation),
+  confirmPasswordReset
+);
+
+// Email Verification Routes
+router.get('/verify-email', verifyEmail);
+router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification', resendVerification);
 
 // Firebase Authentication Route
 router.post('/firebase', validate(firebaseAuthValidation), firebaseAuth);

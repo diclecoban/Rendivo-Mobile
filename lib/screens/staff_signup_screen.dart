@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
-import 'staff_dashboard_screen.dart';
+import 'email_verification_notice_screen.dart';
 
 class StaffSignUpScreen extends StatefulWidget {
   const StaffSignUpScreen({super.key});
@@ -399,11 +399,15 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Welcome to the team!')),
+        const SnackBar(
+          content: Text('Account created. Please verify your email.'),
+        ),
       );
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const StaffDashboardScreen()),
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationNoticeScreen(email: email),
+        ),
         (route) => false,
       );
     } on AppException catch (e) {

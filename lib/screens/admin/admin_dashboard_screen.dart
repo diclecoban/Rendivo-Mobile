@@ -42,7 +42,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       });
     } catch (_) {
       setState(() {
-        _error = 'Bekleyen işletme kayıtları getirilemedi.';
+        _error = 'Bekleyen isletme kayitlari getirilemedi.';
       });
     } finally {
       if (mounted) {
@@ -64,7 +64,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return;
       }
       if (notes == null) {
-        // User cancelled the dialog.
         return;
       }
     }
@@ -84,7 +83,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         SnackBar(
           content: Text(
             approve
-                ? '${application.businessName} onaylandı.'
+                ? '${application.businessName} onaylandi.'
                 : '${application.businessName} reddedildi.',
           ),
         ),
@@ -98,7 +97,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('İşlem tamamlanamadı. Lütfen tekrar deneyin.'),
+          content: Text('Islem tamamlanamadi. Lutfen tekrar deneyin.'),
         ),
       );
     } finally {
@@ -113,18 +112,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Red gerekçesi (opsiyonel)'),
+        title: const Text('Red gerekcesi (opsiyonel)'),
         content: TextField(
           controller: controller,
           maxLines: 3,
           decoration: const InputDecoration(
-            hintText: 'İşletme sahibine gösterilecek mesaj',
+            hintText: 'Isletme sahibine gosterilecek mesaj',
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Vazgeç'),
+            child: const Text('Vazgec'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
@@ -183,7 +182,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           _StatusCard(
             color: Colors.red.shade50,
-            title: 'Bir sorun oluştu',
+            title: 'Bir sorun olustu',
             message: _error!,
             icon: Icons.error_outline,
           ),
@@ -197,9 +196,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: const [
           _StatusCard(
             color: Color(0xFFE7F7EF),
-            title: 'Bekleyen kayıt yok',
+            title: 'Bekleyen kayit yok',
             message:
-                'Tüm işletme başvuruları değerlendirildi. Yeni kayıtlar geldiğinde burada göreceksiniz.',
+                'Tum isletme basvurulari degerlendirildi. Yeni kayitlar geldiginde burada goreceksiniz.',
             icon: Icons.verified_user_outlined,
           ),
         ],
@@ -243,7 +242,7 @@ class _BusinessApplicationCard extends StatelessWidget {
     final year = local.year.toString();
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
-    return '$day.$month.$year • $hour:$minute';
+    return '$day.$month.$year $hour:$minute';
   }
 
   @override
@@ -295,7 +294,7 @@ class _BusinessApplicationCard extends StatelessWidget {
                     Text(
                       application.businessType.isNotEmpty
                           ? application.businessType
-                          : 'İşletme',
+                          : 'Isletme',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
@@ -324,7 +323,7 @@ class _BusinessApplicationCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _InfoRow(
-            label: 'İşletme Sahibi',
+            label: 'Isletme Sahibi',
             value: application.ownerName,
           ),
           _InfoRow(
@@ -338,11 +337,11 @@ class _BusinessApplicationCard extends StatelessWidget {
             ),
           if (application.city?.isNotEmpty == true)
             _InfoRow(
-              label: 'Şehir',
+              label: 'Sehir',
               value: application.city!,
             ),
           _InfoRow(
-            label: 'Başvuru Tarihi',
+            label: 'Basvuru Tarihi',
             value: _formatDate(application.submittedAt),
           ),
           if (application.reviewNotes?.isNotEmpty == true)

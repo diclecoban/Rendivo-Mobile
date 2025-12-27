@@ -7,6 +7,8 @@ import '../services/auth_service.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'business_dashboard_screen.dart';
 import 'customer_dashboard_screen.dart';
+import 'email_verification_code_screen.dart';
+import 'forgot_password_screen.dart';
 import 'signup_role_screen.dart';
 import 'staff_dashboard_screen.dart';
 
@@ -83,6 +85,21 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => targetScreen),
       );
     } on AppException catch (e) {
+      final details = e.details;
+      final emailNotVerified =
+          e.statusCode == 403 && details?['emailVerified'] == false;
+      if (emailNotVerified) {
+        final emailValue =
+            details?['email']?.toString() ?? _emailController.text.trim();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationCodeScreen(email: emailValue),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
@@ -197,7 +214,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             TextButton(
                               onPressed: () {
-                                // TODO: Password reset flow will be added.
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ForgotPasswordScreen(),
+                                  ),
+                                );
                               },
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,

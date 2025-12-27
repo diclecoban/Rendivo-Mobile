@@ -92,7 +92,14 @@ class BackendService {
         : decoded is String && decoded.isNotEmpty
             ? decoded
             : 'Request failed with status ${response.statusCode}';
-    throw AppException(message);
+    final details = decoded is Map
+        ? Map<String, dynamic>.from(decoded as Map)
+        : null;
+    throw AppException(
+      message,
+      statusCode: response.statusCode,
+      details: details,
+    );
   }
 
   // Auth
@@ -212,6 +219,46 @@ class BackendService {
         ..setToken(token);
       return user;
     });
+  }
+
+  Future<void> requestPasswordReset(String email) async {
+    final uri = Uri.parse('$_baseUrl/auth/password/reset/request');
+    final response = await _client.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({'email': email}),
+    );
+
+    _handleResponse(response, (_) => null);
+  }
+
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/password/reset/confirm');
+    final response = await _client.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'email': email,
+        'code': code,
+        'password': password,
+      }),
+    );
+
+    _handleResponse(response, (_) => null);
+  }
+
+  Future<void> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/verify-email')
+        .replace(queryParameters: {'email': email, 'code': code});
+    final response = await _client.get(uri, headers: _headers());
+    _handleResponse(response, (_) => null);
   }
 
   // Businesses & services

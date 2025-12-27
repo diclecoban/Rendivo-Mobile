@@ -4,7 +4,7 @@ import '../core/theme/app_colors.dart';
 import '../core/utils/validators.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
-import 'customer_dashboard_screen.dart';
+import 'email_verification_notice_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_of_service_screen.dart';
 
@@ -103,13 +103,14 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('All set! Your account has been created.'),
+          content:
+              Text('Account created. Please verify your email to continue.'),
         ),
       );
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const CustomerDashboardScreen(),
+          builder: (_) => EmailVerificationNoticeScreen(email: email),
         ),
         (route) => false,
       );

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/owner_signup.dart';
 import '../../services/backend_service.dart';
-import '../business_dashboard_screen.dart';
+import '../email_verification_notice_screen.dart';
 
 class BusinessOwnerSignUpStep3Screen extends StatefulWidget {
   const BusinessOwnerSignUpStep3Screen({super.key});
@@ -29,16 +29,20 @@ class _BusinessOwnerSignUpStep3ScreenState
     });
 
     try {
-      final user = await _backend.registerBusinessOwner(_model);
+      await _backend.registerBusinessOwner(_model);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Welcome, ${user.fullName}!'),
+        const SnackBar(
+          content: Text('Account created. Please verify your email.'),
         ),
       );
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const BusinessDashboardScreen()),
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationNoticeScreen(
+            email: _model.email.isNotEmpty ? _model.email : null,
+          ),
+        ),
         (route) => false,
       );
     } catch (e) {

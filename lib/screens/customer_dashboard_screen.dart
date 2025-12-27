@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../models/app_models.dart';
 import '../services/session_service.dart';
-import '../services/auth_service.dart';
-import 'login_screen.dart';
 import 'customer_appointments_screen.dart';
 import 'customer_discover_screen.dart';
+import '../services/auth_service.dart';
+import 'login_screen.dart';
 import '../services/backend_service.dart';
 
 
@@ -25,8 +26,7 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
   Widget build(BuildContext context) {
     final tabs = <Widget>[
       _DashboardHome(session: _session),
-      _ProfileTab(session: _session),
-      const _SettingsTab(),
+      const CustomerDiscoverScreen(),
     ];
 
     return Scaffold(
@@ -43,12 +43,8 @@ class _CustomerDashboardScreenState extends State<CustomerDashboardScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
+            icon: Icon(Icons.explore_outlined),
+            label: 'Discover',
           ),
         ],
         onTap: (index) => setState(() => _currentIndex = index),
@@ -106,6 +102,9 @@ class _DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<_DashboardHome> {
   late final Future<_DashboardData> _future;
+  List<Appointment> _appointments = [];
+  DateTime _selectedDate = DateTime.now();
+  DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   @override
   void initState() {
@@ -117,6 +116,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
     try {
       final appointments =
           await BackendService.instance.fetchCustomerAppointments();
+      if (mounted) {
+        setState(() {
+          _appointments = appointments;
+        });
+      }
       final now = DateTime.now();
       final upcoming = appointments
           .where(
@@ -179,18 +183,70 @@ class _DashboardHomeState extends State<_DashboardHome> {
     return '$sStr - $eStr';
   }
 
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _hasAppointment(DateTime date) {
+    return _appointments.any((appt) => _isSameDay(appt.startAt, date));
+  }
+
+  List<DateTime?> _daysForMonth(DateTime month) {
+    final first = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leading = first.weekday % 7;
+    final days = <DateTime?>[];
+    for (int i = 0; i < leading; i++) {
+      days.add(null);
+    }
+    for (int day = 1; day <= daysInMonth; day++) {
+      days.add(DateTime(month.year, month.month, day));
+    }
+    return days;
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + delta);
+    });
+  }
+
+  String _monthLabel(DateTime month) {
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${names[month.month - 1]} ${month.year}';
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    AuthService.signOut();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = widget.session.currentUser;
 
     final fullName = (user?.fullName ?? '').trim();
-    final emailPrefix =
-        (user?.email ?? '').contains('@') ? user!.email.split('@').first : '';
-    final firstName =
-        fullName.isNotEmpty ? fullName.split(RegExp(r'\s+')).first : '';
-    final greetingName = firstName.isNotEmpty
-        ? firstName
-        : (emailPrefix.isNotEmpty ? emailPrefix : 'there');
+    final emailValue = (user?.email ?? '').trim();
+    final greetingName =
+        fullName.isNotEmpty ? fullName : (emailValue.isNotEmpty ? emailValue : 'there');
     final avatarLetter = (fullName.isNotEmpty
             ? fullName[0]
             : (user?.email ?? '').trim().isNotEmpty
@@ -248,18 +304,41 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       ],
                     ),
                   ),
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundImage: null,
-                    backgroundColor: Colors.white,
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'logout') {
+                        _logout(context);
+                      }
+                    },
+                    offset: const Offset(0, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'logout',
+                        child: Text(
+                          'Log out',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                    ],
                     child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: primaryPink,
-                      child: Text(
-                        avatarLetter,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                      radius: 18,
+                      backgroundImage: null,
+                      backgroundColor: Colors.white,
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: primaryPink,
+                        child: Text(
+                          avatarLetter,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -384,7 +463,19 @@ class _DashboardHomeState extends State<_DashboardHome> {
               ),
 
               const SizedBox(height: 16),
-              const _CalendarCard(),
+              _CalendarCard(
+                currentMonth: _currentMonth,
+                selectedDate: _selectedDate,
+                days: _daysForMonth(_currentMonth),
+                hasAppointment: _hasAppointment,
+                onSelectDate: (date) {
+                  setState(() {
+                    _selectedDate = date;
+                  });
+                },
+                onChangeMonth: _changeMonth,
+                monthLabel: _monthLabel(_currentMonth),
+              ),
               const SizedBox(height: 16),
 
               // ✅ this title becomes EMPTY (and hidden) if there is no appointment
@@ -425,211 +516,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
 }
 
 /* =========================
-   PROFILE / SETTINGS
-   ========================= */
-
-class _ProfileTab extends StatelessWidget {
-  final SessionService session;
-
-  const _ProfileTab({required this.session});
-
-  @override
-  Widget build(BuildContext context) {
-    final user = session.currentUser;
-    if (user == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.person_outline, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
-            Text(
-              'Please sign in to see your profile.',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: primaryPink,
-                child: Text(
-                  user.fullName.isNotEmpty
-                      ? user.fullName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.fullName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    user.email,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Account',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          _ProfileRow(label: 'Role', value: user.role),
-          _ProfileRow(label: 'User ID', value: user.id),
-          if (session.authToken != null && session.authToken!.isNotEmpty)
-            const _ProfileRow(label: 'Token', value: 'Received'),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              onPressed: () async {
-                // Confirm before logging out
-                final doLogout = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Log out'),
-                    content: const Text('Are you sure you want to log out?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(true),
-                        child: const Text(
-                          'Log out',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (doLogout == true) {
-                  // Clear session and go back to login screen
-                  AuthService.signOut();
-                  if (!context.mounted) return;
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Log Out',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsTab extends StatelessWidget {
-  const _SettingsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.settings_outlined, size: 56, color: Colors.grey),
-          SizedBox(height: 12),
-          Text(
-            'Settings coming soon.',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/* =========================
    UI COMPONENTS (UNCHANGED LOOK)
    ========================= */
-
-class _ProfileRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ProfileRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 13)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _StatCard extends StatelessWidget {
   final String title;
@@ -680,15 +568,35 @@ class _StatCard extends StatelessWidget {
 }
 
 class _CalendarCard extends StatelessWidget {
-  const _CalendarCard();
+  final DateTime currentMonth;
+  final DateTime selectedDate;
+  final List<DateTime?> days;
+  final bool Function(DateTime date) hasAppointment;
+  final ValueChanged<DateTime> onSelectDate;
+  final void Function(int delta) onChangeMonth;
+  final String monthLabel;
+
+  const _CalendarCard({
+    required this.currentMonth,
+    required this.selectedDate,
+    required this.days,
+    required this.hasAppointment,
+    required this.onSelectDate,
+    required this.onChangeMonth,
+    required this.monthLabel,
+  });
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -701,54 +609,126 @@ class _CalendarCard extends StatelessWidget {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Icon(Icons.chevron_left),
+            children: [
+              IconButton(
+                onPressed: () => onChangeMonth(-1),
+                icon: const Icon(Icons.chevron_left),
+              ),
               Text(
-                'October 2024',
-                style: TextStyle(
+                monthLabel,
+                style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              Icon(Icons.chevron_right),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              _CalendarDayHeader('Sun'),
-              _CalendarDayHeader('Mon'),
-              _CalendarDayHeader('Tue'),
-              _CalendarDayHeader('Wed'),
-              _CalendarDayHeader('Thu'),
-              _CalendarDayHeader('Fri'),
-              _CalendarDayHeader('Sat'),
+              IconButton(
+                onPressed: () => onChangeMonth(1),
+                icon: const Icon(Icons.chevron_right),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          const _CalendarNumberRow(
-              numbers: ['29', '30', '1', '2', '3', '4', '5']),
-          const _CalendarNumberRow(
-              numbers: ['6', '7', '8', '9', '10', '11', '12']),
-          const _CalendarNumberRow(
-              numbers: ['13', '14', '15', '16', '17', '18', '19']),
-          const _CalendarNumberRow(
-            numbers: ['20', '21', '22', '23', '24', '25', '26'],
-            selectedIndex: 0,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              _CalendarDow('Sun'),
+              _CalendarDow('Mon'),
+              _CalendarDow('Tue'),
+              _CalendarDow('Wed'),
+              _CalendarDow('Thu'),
+              _CalendarDow('Fri'),
+              _CalendarDow('Sat'),
+            ],
           ),
-          const _CalendarNumberRow(
-              numbers: ['27', '28', '29', '30', '31', '1', '2']),
+          const SizedBox(height: 6),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1,
+            ),
+            itemCount: days.length,
+            itemBuilder: (context, index) {
+              final day = days[index];
+              if (day == null) {
+                return const SizedBox.shrink();
+              }
+
+              final today = DateTime.now();
+              final todayDate = DateTime(today.year, today.month, today.day);
+              final dayDate = DateTime(day.year, day.month, day.day);
+              final isPast = dayDate.isBefore(todayDate);
+              final isToday = _isSameDay(day, DateTime.now());
+              final isSelected = _isSameDay(day, selectedDate);
+              final hasBooking = hasAppointment(day);
+
+              Color bgColor = Colors.white;
+              Color borderColor = Colors.grey.shade300;
+              Color textColor = Colors.black87;
+
+              if (isSelected) {
+                bgColor = primaryPink.withOpacity(0.12);
+                borderColor = primaryPink;
+                textColor = primaryPink;
+              } else if (isPast) {
+                bgColor = const Color(0xFFF3F3F3);
+                borderColor = Colors.grey.shade300;
+                textColor = Colors.grey.shade500;
+              } else if (isToday) {
+                bgColor = const Color(0xFFF4F7FF);
+                borderColor = const Color(0xFFB2C2FF);
+                textColor = const Color(0xFF3755B7);
+              }
+
+              return GestureDetector(
+                onTap: () => onSelectDate(day),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: borderColor),
+                  ),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${day.day}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      if (hasBooking)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: primaryPink,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 }
 
-class _CalendarDayHeader extends StatelessWidget {
+class _CalendarDow extends StatelessWidget {
   final String label;
 
-  const _CalendarDayHeader(this.label);
+  const _CalendarDow(this.label);
 
   @override
   Widget build(BuildContext context) {
@@ -761,47 +741,6 @@ class _CalendarDayHeader extends StatelessWidget {
           color: Colors.grey,
         ),
       ),
-    );
-  }
-}
-
-class _CalendarNumberRow extends StatelessWidget {
-  final List<String> numbers;
-  final int? selectedIndex;
-
-  const _CalendarNumberRow({
-    required this.numbers,
-    this.selectedIndex,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(numbers.length, (index) {
-        final isSelected = selectedIndex == index;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: BoxDecoration(
-                color: isSelected ? primaryPink : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                numbers[index],
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  color: isSelected ? Colors.white : Colors.black,
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
     );
   }
 }

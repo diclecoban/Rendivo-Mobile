@@ -42,5 +42,28 @@ class AuthService {
     );
   }
 
+  static Future<void> requestPasswordReset(String email) async {
+    await _backend.requestPasswordReset(email);
+  }
+
+  static Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    await _backend.confirmPasswordReset(
+      email: email,
+      code: code,
+      password: password,
+    );
+  }
+
+  static Future<void> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    await _backend.verifyEmail(email: email, code: code);
+  }
+
   static void signOut() => _session.clear();
 }

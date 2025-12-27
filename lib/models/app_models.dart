@@ -126,6 +126,7 @@ class StaffMember {
 
 class Business {
   final String id;
+  final String businessId;
   final String businessName;
   final String businessType;
   final String phone;
@@ -143,6 +144,7 @@ class Business {
 
   const Business({
     required this.id,
+    required this.businessId,
     required this.businessName,
     required this.businessType,
     required this.phone,
@@ -174,6 +176,7 @@ class Business {
         [];
     return Business(
       id: (json['id'] ?? json['businessId'] ?? '').toString(),
+      businessId: (json['businessId'] ?? json['business_id'] ?? '').toString(),
       businessName: json['businessName'] ?? json['name'] ?? '',
       businessType: json['businessType'] ?? '',
       phone: json['phone'] ?? '',
@@ -205,7 +208,8 @@ class Business {
   }
 
   Map<String, dynamic> toMap() => {
-        'businessId': id,
+        'id': id,
+        'businessId': businessId,
         'businessName': businessName,
         'businessType': businessType,
         'phone': phone,
@@ -520,7 +524,14 @@ class BusinessAvailability {
 
 class AppException implements Exception {
   final String message;
-  const AppException(this.message);
+  final int? statusCode;
+  final Map<String, dynamic>? details;
+
+  const AppException(
+    this.message, {
+    this.statusCode,
+    this.details,
+  });
 
   @override
   String toString() => message;
