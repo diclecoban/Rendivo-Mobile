@@ -99,6 +99,7 @@ class _AppointmentRescheduleScreenState
     final shifts = _shiftSlotsForDate(date);
     if (shifts.isEmpty) return [];
 
+    final stepMinutes = _durationMinutes;
     final slots = <DateTime>[];
     for (final shift in shifts) {
       final start = shift.startAt.toLocal();
@@ -118,8 +119,11 @@ class _AppointmentRescheduleScreenState
         end.minute,
       );
       while (cursor.isBefore(limit)) {
-        slots.add(cursor);
-        cursor = cursor.add(const Duration(minutes: 30));
+        final slotEnd = cursor.add(Duration(minutes: _durationMinutes));
+        if (!slotEnd.isAfter(limit)) {
+          slots.add(cursor);
+        }
+        cursor = cursor.add(Duration(minutes: stepMinutes));
       }
     }
     return slots;

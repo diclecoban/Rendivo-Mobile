@@ -146,6 +146,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     final shifts = _shiftSlotsForDate(date);
     if (shifts.isEmpty) return [];
 
+    final stepMinutes = _effectiveDuration;
     final slots = <DateTime>[];
     for (final shift in shifts) {
       final start = shift.startAt.toLocal();
@@ -165,8 +166,11 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         end.minute,
       );
       while (cursor.isBefore(limit)) {
-        slots.add(cursor);
-        cursor = cursor.add(const Duration(minutes: 30));
+        final slotEnd = cursor.add(Duration(minutes: _effectiveDuration));
+        if (!slotEnd.isAfter(limit)) {
+          slots.add(cursor);
+        }
+        cursor = cursor.add(Duration(minutes: stepMinutes));
       }
     }
     return slots;
