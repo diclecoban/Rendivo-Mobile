@@ -124,6 +124,87 @@ class StaffMember {
   }
 }
 
+class StaffUserProfile {
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String fullName;
+  final String email;
+  final String phone;
+
+  const StaffUserProfile({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.fullName,
+    required this.email,
+    required this.phone,
+  });
+
+  factory StaffUserProfile.fromJson(Map<String, dynamic> json) {
+    final fullName = (json['fullName'] ?? '').toString().trim();
+    final firstName = (json['firstName'] ?? '').toString().trim();
+    final lastName = (json['lastName'] ?? '').toString().trim();
+    final resolvedName = fullName.isNotEmpty
+        ? fullName
+        : [firstName, lastName].where((value) => value.isNotEmpty).join(' ');
+    return StaffUserProfile(
+      id: (json['id'] ?? '').toString(),
+      firstName: firstName,
+      lastName: lastName,
+      fullName: resolvedName,
+      email: (json['email'] ?? '').toString(),
+      phone: (json['phone'] ?? '').toString(),
+    );
+  }
+}
+
+class StaffProfile {
+  final String id;
+  final String userId;
+  final String businessId;
+  final String position;
+  final bool isActive;
+  final DateTime? joinedAt;
+  final StaffUserProfile? user;
+
+  const StaffProfile({
+    required this.id,
+    required this.userId,
+    required this.businessId,
+    required this.position,
+    required this.isActive,
+    required this.joinedAt,
+    required this.user,
+  });
+
+  factory StaffProfile.fromJson(Map<String, dynamic> json) {
+    final userMap = json['user'] is Map
+        ? Map<String, dynamic>.from(json['user'] as Map)
+        : null;
+    return StaffProfile(
+      id: (json['id'] ?? '').toString(),
+      userId: (json['userId'] ?? '').toString(),
+      businessId: (json['businessId'] ?? '').toString(),
+      position: (json['position'] ?? '').toString(),
+      isActive: json['isActive'] == true,
+      joinedAt: json['joinedAt'] != null
+          ? DateTime.tryParse(json['joinedAt'].toString())
+          : null,
+      user: userMap != null ? StaffUserProfile.fromJson(userMap) : null,
+    );
+  }
+
+  String get displayName {
+    final userName = user?.fullName ?? '';
+    if (userName.isNotEmpty) return userName;
+    final first = user?.firstName ?? '';
+    final last = user?.lastName ?? '';
+    final combined = '$first $last'.trim();
+    return combined.isNotEmpty ? combined : 'Unknown';
+  }
+}
+
 class Business {
   final String id;
   final String businessId;

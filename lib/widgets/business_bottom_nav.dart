@@ -39,6 +39,10 @@ class BusinessBottomNav extends StatelessWidget {
               icon: Icon(Icons.calendar_today_outlined),
               label: 'Schedule',
             ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.event_note_outlined),
+              label: 'Appointments',
+            ),
           ],
         ),
       ),

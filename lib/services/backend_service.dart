@@ -462,6 +462,19 @@ class BackendService {
     });
   }
 
+  Future<List<StaffProfile>> fetchOwnerStaffProfiles() async {
+    final uri = Uri.parse('$_baseUrl/shifts/staff-members');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <StaffProfile>[];
+      return jsonBody
+          .map((item) => StaffProfile.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ))
+          .toList();
+    });
+  }
+
   Future<ShiftItem> createShift({
     required String staffId,
     required DateTime shiftDate,

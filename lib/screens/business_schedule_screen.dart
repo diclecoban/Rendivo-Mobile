@@ -5,6 +5,9 @@ import '../models/app_models.dart';
 import '../services/backend_service.dart';
 import '../widgets/business_bottom_nav.dart';
 import 'business_dashboard_screen.dart';
+import 'business_services_screen.dart';
+import 'business_staff_screen.dart';
+import 'business_appointments_screen.dart';
 
 class BusinessScheduleScreen extends StatefulWidget {
   final bool? isPending;
@@ -22,10 +25,8 @@ class BusinessScheduleScreen extends StatefulWidget {
 class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   final _backend = BackendService.instance;
 
-  DateTime? _baseMonth;
-  PageController? _pageController;
-  DateTime? _currentMonth;
-  int? _pageIndex;
+  DateTime _rangeStart = DateTime.now();
+  DateTime _rangeEnd = DateTime.now().add(const Duration(days: 30));
   List<ShiftItem> _shifts = [];
   List<StaffMember> _staff = [];
   bool _loading = false;
@@ -35,48 +36,25 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   @override
   void initState() {
     super.initState();
-    _ensurePaging();
+    _syncRange();
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _pageController?.dispose();
-    super.dispose();
-  }
-
-  void _ensurePaging() {
-    if (_pageController != null) return;
+  void _syncRange() {
     final now = DateTime.now();
-    _baseMonth = DateTime(now.year, now.month, 1);
-    _pageIndex = 1200;
-    _pageController = PageController(initialPage: _pageIndex!);
-    _currentMonth = _monthForPage(_pageIndex!);
-    _loadDataForMonth(_currentMonth!);
+    _rangeStart = DateTime(now.year, now.month, now.day);
+    _rangeEnd = _rangeStart.add(const Duration(days: 30));
   }
 
-  DateTime _monthForPage(int page) {
-    final baseMonth = _baseMonth ?? DateTime.now();
-    final baseIndex = _pageIndex ?? 1200;
-    final delta = page - baseIndex;
-    return DateTime(baseMonth.year, baseMonth.month + delta, 1);
-  }
-
-  int _pageForMonth(DateTime month) {
-    final baseMonth = _baseMonth ?? DateTime.now();
-    final baseIndex = _pageIndex ?? 1200;
-    final deltaMonths = (month.year - baseMonth.year) * 12 +
-        (month.month - baseMonth.month);
-    return baseIndex + deltaMonths;
-  }
-
-  Future<void> _loadDataForMonth(DateTime month) async {
+  Future<void> _loadData() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    final startDate = _gridStartForMonth(month);
-    final endDate = startDate.add(const Duration(days: 41));
+    _syncRange();
+    final startDate = _rangeStart;
+    final endDate = _rangeEnd;
 
     try {
       final results = await Future.wait([
@@ -104,16 +82,10 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     }
   }
 
-  DateTime _gridStartForMonth(DateTime month) {
-    final firstDay = DateTime(month.year, month.month, 1);
-    final offset = firstDay.weekday - DateTime.monday;
-    return firstDay.subtract(Duration(days: offset));
-  }
-
-  List<DateTime> _getDays(DateTime month) {
-    final start = _gridStartForMonth(month);
+  List<DateTime> _getDays() {
+    final start = _rangeStart;
     return List.generate(
-      42,
+      31,
       (index) => start.add(Duration(days: index)),
     );
   }
@@ -297,8 +269,6 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _ensurePaging();
-    final currentMonth = _currentMonth ?? DateTime.now();
     final isPending = widget.isPending ?? false;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -325,7 +295,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => _loadDataForMonth(currentMonth),
+          onRefresh: _loadData,
           child: _loading
               ? ListView(
                   children: const [
@@ -361,9 +331,28 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
                 builder: (_) => const BusinessDashboardScreen(),
               ),
             );
-          } else if (index == 1 || index == 2) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Coming soon.')),
+          } else if (index == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessServicesScreen(isPending: isPending),
+              ),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessStaffScreen(isPending: isPending),
+              ),
+            );
+          } else if (index == 4) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessAppointmentsScreen(
+                  isPending: isPending,
+                ),
+              ),
             );
           }
         },
@@ -372,11 +361,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   }
 
   Widget _buildContent() {
-    final currentMonth = _currentMonth ?? DateTime.now();
-    final pageController = _pageController;
-    if (pageController == null) {
-      return const SizedBox.shrink();
-    }
+    final days = _getDays();
 
     return Column(
       children: [
@@ -389,54 +374,23 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _formatMonth(currentMonth),
+                    'Next 30 days',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Assign and manage staff shifts.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  Text(
+                    '${_formatDateLabel(_rangeStart)} - ${_formatDateLabel(_rangeEnd)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      pageController.previousPage(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                      );
-                    },
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      pageController.nextPage(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                      );
-                    },
-                    icon: const Icon(Icons.chevron_right),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      final now = DateTime.now();
-                      final target =
-                          _pageForMonth(DateTime(now.year, now.month, 1));
-                      pageController.animateToPage(
-                        target,
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                      );
-                    },
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: const Text('Today'),
-                  ),
-                ],
+              TextButton.icon(
+                onPressed: _loadData,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -451,29 +405,14 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           ),
         const SizedBox(height: 8),
         Expanded(
-          child: PageView.builder(
-            controller: pageController,
-            onPageChanged: (page) {
-              final month = _monthForPage(page);
-              setState(() {
-                _currentMonth = month;
-              });
-              _loadDataForMonth(month);
-            },
-            itemBuilder: (context, index) {
-              final month = _monthForPage(index);
-              final days = _getDays(month);
-              return _CalendarPage(
-                days: days,
-                isToday: _isToday,
-                shiftsForDate: _getShiftsForDate,
-                onDayTap: (date) => _openShiftDialog(selectedDate: date),
-                onShiftTap: (shift) =>
-                    _openShiftDialog(editingShift: shift),
-                shiftBackground: _shiftBackground,
-                shiftTextColor: _shiftTextColor,
-              );
-            },
+          child: _CalendarPage(
+            days: days,
+            isToday: _isToday,
+            shiftsForDate: _getShiftsForDate,
+            onDayTap: (date) => _openShiftDialog(selectedDate: date),
+            onShiftTap: (shift) => _openShiftDialog(editingShift: shift),
+            shiftBackground: _shiftBackground,
+            shiftTextColor: _shiftTextColor,
           ),
         ),
       ],
@@ -738,6 +677,25 @@ String _shortTime(String value) {
     return value.substring(0, 5);
   }
   return value;
+}
+
+String _formatDateLabel(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final month = months[date.month - 1];
+  return '$month ${date.day}';
 }
 
 class _CalendarPage extends StatelessWidget {

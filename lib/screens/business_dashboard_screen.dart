@@ -8,6 +8,9 @@ import '../services/session_service.dart';
 import 'business_schedule_screen.dart';
 import 'login_screen.dart';
 import '../widgets/business_bottom_nav.dart';
+import 'business_services_screen.dart';
+import 'business_staff_screen.dart';
+import 'business_appointments_screen.dart';
 
 class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
@@ -119,7 +122,16 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
         currentIndex: 0,
         isPending: _requiresApproval,
         onTap: (index) {
-          if (index == 3) {
+          if (index == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessServicesScreen(
+                  isPending: _requiresApproval,
+                ),
+              ),
+            );
+          } else if (index == 3) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -128,9 +140,23 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                 ),
               ),
             );
-          } else if (index == 1 || index == 2) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Coming soon.')),
+          } else if (index == 4) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessAppointmentsScreen(
+                  isPending: _requiresApproval,
+                ),
+              ),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BusinessStaffScreen(
+                  isPending: _requiresApproval,
+                ),
+              ),
             );
           }
         },
@@ -455,13 +481,6 @@ class _DashboardContent extends StatelessWidget {
             title: 'Contact',
             mainValue: business?.phone.isNotEmpty == true ? business!.phone : '-',
             trendText: business?.email ?? '',
-            trendColor: Colors.grey,
-          ),
-          const SizedBox(height: 12),
-          _KpiCard(
-            title: 'Business ID',
-            mainValue: business?.id.isNotEmpty == true ? business!.id : '-',
-            trendText: 'Internal business id',
             trendColor: Colors.grey,
           ),
           const SizedBox(height: 16),
