@@ -133,6 +133,13 @@ class Business {
   final Address address;
   final List<ServiceItem> services;
   final List<StaffMember> staff;
+  final String approvalStatus;
+  final bool isActive;
+  final DateTime? approvedAt;
+  final DateTime? rejectedAt;
+  final String? reviewNotes;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const Business({
     required this.id,
@@ -143,6 +150,13 @@ class Business {
     required this.address,
     required this.services,
     required this.staff,
+    this.approvalStatus = 'pending',
+    this.isActive = false,
+    this.approvedAt,
+    this.rejectedAt,
+    this.reviewNotes,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory Business.fromJson(Map<String, dynamic> json) {
@@ -172,6 +186,21 @@ class Business {
       ),
       services: serviceList,
       staff: staffList,
+      approvalStatus: (json['approvalStatus'] ?? 'pending').toString(),
+      isActive: json['isActive'] == true,
+      approvedAt: json['approvedAt'] != null
+          ? DateTime.tryParse(json['approvedAt'].toString())
+          : null,
+      rejectedAt: json['rejectedAt'] != null
+          ? DateTime.tryParse(json['rejectedAt'].toString())
+          : null,
+      reviewNotes: json['reviewNotes']?.toString(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
     );
   }
 
@@ -190,7 +219,79 @@ class Business {
                   'role': member.role,
                 })
             .toList(),
+        'approvalStatus': approvalStatus,
+        'isActive': isActive,
+        'approvedAt': approvedAt?.toIso8601String(),
+        'rejectedAt': rejectedAt?.toIso8601String(),
+        'reviewNotes': reviewNotes,
+        'createdAt': createdAt?.toIso8601String(),
+        'updatedAt': updatedAt?.toIso8601String(),
       };
+}
+
+class BusinessApplication {
+  final String id;
+  final String businessName;
+  final String businessType;
+  final String status;
+  final String ownerName;
+  final String ownerEmail;
+  final String? ownerPhone;
+  final String? city;
+  final DateTime submittedAt;
+  final DateTime? reviewedAt;
+  final String? reviewNotes;
+
+  const BusinessApplication({
+    required this.id,
+    required this.businessName,
+    required this.businessType,
+    required this.status,
+    required this.ownerName,
+    required this.ownerEmail,
+    this.ownerPhone,
+    this.city,
+    required this.submittedAt,
+    this.reviewedAt,
+    this.reviewNotes,
+  });
+
+  factory BusinessApplication.fromJson(Map<String, dynamic> json) {
+    final owner = json['owner'] is Map
+        ? Map<String, dynamic>.from(json['owner'] as Map)
+        : const <String, dynamic>{};
+    final ownerFullName = owner['fullName']?.toString() ?? '';
+    final ownerNameParts = [
+      owner['firstName']?.toString() ?? '',
+      owner['lastName']?.toString() ?? '',
+    ].where((value) => value.isNotEmpty).toList();
+    final resolvedOwnerName = ownerFullName.isNotEmpty
+        ? ownerFullName
+        : ownerNameParts.isNotEmpty
+            ? ownerNameParts.join(' ')
+            : '';
+
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      return DateTime.tryParse(value.toString());
+    }
+
+    return BusinessApplication(
+      id: (json['id'] ?? json['businessId'] ?? '').toString(),
+      businessName: json['businessName'] ?? '',
+      businessType: json['businessType']?.toString() ?? '',
+      status: json['approvalStatus']?.toString() ?? 'pending',
+      ownerName: resolvedOwnerName.isNotEmpty
+          ? resolvedOwnerName
+          : owner['email']?.toString() ?? 'Unknown owner',
+      ownerEmail: owner['email']?.toString() ?? '',
+      ownerPhone: owner['phone']?.toString(),
+      city: json['city']?.toString(),
+      submittedAt: parseDate(json['createdAt']) ?? DateTime.now(),
+      reviewedAt: parseDate(json['approvedAt']) ?? parseDate(json['rejectedAt']),
+      reviewNotes: json['reviewNotes']?.toString(),
+    );
+  }
 }
 
 class Appointment {

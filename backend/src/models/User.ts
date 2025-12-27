@@ -6,7 +6,8 @@ import bcrypt from 'bcryptjs';
 export enum UserRole {
   CUSTOMER = 'customer',
   STAFF = 'staff',
-  BUSINESS_OWNER = 'business_owner'
+  BUSINESS_OWNER = 'business_owner',
+  ADMIN = 'admin',
 }
 
 export enum AuthProvider {

@@ -4,6 +4,7 @@ import '../core/theme/app_colors.dart';
 import '../core/utils/validators.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
+import 'admin/admin_dashboard_screen.dart';
 import 'business_dashboard_screen.dart';
 import 'customer_dashboard_screen.dart';
 import 'signup_role_screen.dart';
@@ -58,6 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Widget targetScreen;
       switch (user.role) {
+        case 'admin':
+          targetScreen = const AdminDashboardScreen();
+          break;
         case 'business_owner':
           targetScreen = const BusinessDashboardScreen();
           break;

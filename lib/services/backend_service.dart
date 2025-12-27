@@ -10,8 +10,8 @@ import 'session_service.dart';
 class BackendService {
   BackendService._({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client() {
-    final envBase =
-        const String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    const envBase =
+        String.fromEnvironment('API_BASE_URL', defaultValue: '');
     final effectiveBase = baseUrl ??
         (envBase.isNotEmpty
             ? envBase
@@ -83,7 +83,7 @@ class BackendService {
       try {
         return mapper(decoded);
       } catch (_) {
-        throw AppException('Unexpected response from server.');
+        throw const AppException('Unexpected response from server.');
       }
     }
 
@@ -259,6 +259,46 @@ class BackendService {
     );
   }
 
+  Future<List<BusinessApplication>> fetchPendingBusinessApplications() async {
+    final uri = Uri.parse('$_baseUrl/admin/businesses/pending');
+    final response = await _client.get(uri, headers: _headers(withAuth: true));
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <BusinessApplication>[];
+      return jsonBody
+          .map(
+            (item) => BusinessApplication.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList();
+    });
+  }
+
+  Future<BusinessApplication> reviewBusinessApplication({
+    required String businessId,
+    required bool approve,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/admin/businesses/$businessId/review');
+    final response = await _client.post(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'decision': approve ? 'approve' : 'reject',
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      }),
+    );
+
+    return _handleResponse(
+      response,
+      (jsonBody) => BusinessApplication.fromJson(
+        Map<String, dynamic>.from(
+          (jsonBody['business'] ?? jsonBody) as Map,
+        ),
+      ),
+    );
+  }
+
   // Owner service management
   Future<List<ServiceItem>> fetchOwnerServices() async {
     final uri = Uri.parse('$_baseUrl/services');
@@ -379,8 +419,8 @@ class BackendService {
     String? staffId,
     String? notes,
   }) async {
-    var resolvedStaffId = staffId;
-    if (resolvedStaffId == null || resolvedStaffId.isEmpty) {
+    var resolvedStaffId = staffId ?? '';
+    if (resolvedStaffId.isEmpty) {
       final staff = await fetchBusinessStaff(businessId);
       if (staff.isEmpty) {
         throw const AppException(
@@ -397,9 +437,7 @@ class BackendService {
       body: jsonEncode({
         'businessId': int.tryParse(businessId) ?? businessId,
         'serviceIds': serviceIds.map((id) => int.tryParse(id) ?? id).toList(),
-        'staffId': resolvedStaffId != null
-            ? int.tryParse(resolvedStaffId) ?? resolvedStaffId
-            : null,
+        'staffId': int.tryParse(resolvedStaffId) ?? resolvedStaffId,
         'appointmentDate': _formatDate(startAt),
         'startTime': _formatTime(startAt),
         'endTime': _formatTime(endAt),

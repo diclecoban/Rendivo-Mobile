@@ -1,5 +1,5 @@
 import User from './User';
-import Business from './Business';
+import Business, { BusinessApprovalStatus } from './Business';
 import StaffMember from './StaffMember';
 import Service from './Service';
 import Appointment from './Appointment';
@@ -15,6 +15,16 @@ User.hasOne(Business, {
 Business.belongsTo(User, {
   foreignKey: 'ownerId',
   as: 'owner',
+});
+
+User.hasMany(Business, {
+  foreignKey: 'reviewedBy',
+  as: 'reviewedBusinesses',
+});
+
+Business.belongsTo(User, {
+  foreignKey: 'reviewedBy',
+  as: 'reviewer',
 });
 
 User.hasMany(StaffMember, {
@@ -115,4 +125,4 @@ Shift.belongsTo(Business, {
   as: 'business',
 });
 
-export { User, Business, StaffMember, Service, Appointment, AppointmentService, Shift };
+export { User, Business, StaffMember, Service, Appointment, AppointmentService, Shift, BusinessApprovalStatus };

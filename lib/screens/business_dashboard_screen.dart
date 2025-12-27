@@ -20,6 +20,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
   Business? _business;
   bool _loading = false;
   String? _error;
+  String? _dashboardStatus;
+  String? _statusMessage;
 
   @override
   void initState() {
@@ -45,19 +47,29 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
     try {
       final dashboard = await _backend.fetchBusinessDashboard();
+      final status = dashboard['status']?.toString() ?? 'ready';
+      final message = dashboard['message']?.toString();
+      setState(() {
+        _dashboardStatus = status != 'ready' ? status : null;
+        _statusMessage = status != 'ready' ? message : null;
+      });
       final businessMap = dashboard['business'] as Map?;
       final businessId = businessMap?['id']?.toString();
       if (businessId == null || businessId.isEmpty) {
-        throw Exception('Business not found for this account.');
+        throw const AppException('Business not found for this account.');
       }
 
       final business = await _backend.fetchBusinessById(businessId);
       setState(() {
         _business = business;
       });
+    } on AppException catch (e) {
+      setState(() {
+        _error = e.message;
+      });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Could not load business data. Please try again.';
       });
     } finally {
       if (mounted) {
@@ -70,6 +82,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
 
   int get _serviceCount => _business?.services.length ?? 0;
   int get _staffCount => _business?.staff.length ?? 0;
+  bool get _requiresApproval =>
+      _dashboardStatus != null && _dashboardStatus != 'ready';
 
   @override
   Widget build(BuildContext context) {
@@ -80,171 +94,21 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadBusiness,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _business?.businessName.isNotEmpty == true
-                                ? 'Hello, ${_business!.businessName}!'
-                                : 'Hello${user != null ? ', ${user.fullName}' : ''}!',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            "Here's what's happening with your business.",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.notifications_none_rounded),
-                    ),
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: primaryPink,
-                      child: Text(
-                        (_business?.businessName.isNotEmpty ?? false)
-                            ? _business!.businessName[0].toUpperCase()
-                            : (user?.fullName.isNotEmpty ?? false)
-                                ? user!.fullName[0].toUpperCase()
-                                : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+          child: _requiresApproval
+              ? _PendingApprovalView(
+                  business: _business,
+                  status: _dashboardStatus ?? 'pending_approval',
+                  statusMessage: _statusMessage,
+                  isLoading: _loading,
+                )
+              : _DashboardContent(
+                  business: _business,
+                  loading: _loading,
+                  error: _error,
+                  serviceCount: _serviceCount,
+                  staffCount: _staffCount,
+                  user: user,
                 ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Services',
-                        mainValue: _loading ? '...' : _serviceCount.toString(),
-                        trendText: 'Active services',
-                        trendColor: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _KpiCard(
-                        title: 'Staff',
-                        mainValue: _loading ? '...' : _staffCount.toString(),
-                        trendText: 'Team members',
-                        trendColor: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                _KpiCard(
-                  title: 'Contact',
-                  mainValue:
-                      _business?.phone.isNotEmpty == true ? _business!.phone : '-',
-                  trendText: _business?.email ?? '',
-                  trendColor: Colors.grey,
-                ),
-
-                const SizedBox(height: 16),
-
-                _SectionTitle('Services'),
-                const SizedBox(height: 8),
-                _CardContainer(
-                  child: _loading
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: CircularProgressIndicator(color: primaryPink),
-                          ),
-                        )
-                      : _error != null
-                          ? Text(
-                              _error!,
-                              style: const TextStyle(color: Colors.red),
-                            )
-                          : (_business?.services.isNotEmpty ?? false)
-                              ? Column(
-                                  children: _business!.services
-                                      .take(5)
-                                      .map(
-                                        (s) => Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 10),
-                                          child: _ServiceRow(service: s),
-                                        ),
-                                      )
-                                      .toList(),
-                                )
-                              : const Text(
-                                  'No services yet.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                ),
-
-                const SizedBox(height: 16),
-
-                _SectionTitle('Staff'),
-                const SizedBox(height: 8),
-                _CardContainer(
-                  child: _loading
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: CircularProgressIndicator(color: primaryPink),
-                          ),
-                        )
-                      : (_business?.staff.isNotEmpty ?? false)
-                          ? Column(
-                              children: _business!.staff
-                                  .take(5)
-                                  .map(
-                                    (m) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 10),
-                                      child: _StaffRow(member: m),
-                                    ),
-                                  )
-                                  .toList(),
-                            )
-                          : const Text(
-                              'No staff listed.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                ),
-
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -428,6 +292,355 @@ class _StaffRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DashboardContent extends StatelessWidget {
+  final Business? business;
+  final bool loading;
+  final String? error;
+  final int serviceCount;
+  final int staffCount;
+  final AuthUser? user;
+
+  const _DashboardContent({
+    required this.business,
+    required this.loading,
+    required this.error,
+    required this.serviceCount,
+    required this.staffCount,
+    required this.user,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      business?.businessName.isNotEmpty == true
+                          ? 'Hello, ${business!.businessName}!'
+                          : 'Hello${user != null ? ', ${user!.fullName}' : ''}!',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      error == null
+                          ? "Here's what's happening with your business."
+                          : 'We could not load all data right now.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.notifications_none_rounded),
+              ),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: primaryPink,
+                child: Text(
+                  (business?.businessName.isNotEmpty ?? false)
+                      ? business!.businessName[0].toUpperCase()
+                      : (user?.fullName.isNotEmpty ?? false)
+                          ? user!.fullName[0].toUpperCase()
+                          : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _KpiCard(
+                  title: 'Services',
+                  mainValue: loading ? '...' : serviceCount.toString(),
+                  trendText: 'Active services',
+                  trendColor: Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _KpiCard(
+                  title: 'Staff',
+                  mainValue: loading ? '...' : staffCount.toString(),
+                  trendText: 'Team members',
+                  trendColor: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _KpiCard(
+            title: 'Contact',
+            mainValue: business?.phone.isNotEmpty == true ? business!.phone : '-',
+            trendText: business?.email ?? '',
+            trendColor: Colors.grey,
+          ),
+          const SizedBox(height: 16),
+          const _SectionTitle('Services'),
+          const SizedBox(height: 8),
+          _CardContainer(
+            child: loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: CircularProgressIndicator(color: primaryPink),
+                    ),
+                  )
+                : error != null
+                    ? Text(
+                        error!,
+                        style: const TextStyle(color: Colors.red),
+                      )
+                    : (business?.services.isNotEmpty ?? false)
+                        ? Column(
+                            children: business!.services
+                                .take(5)
+                                .map(
+                                  (s) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _ServiceRow(service: s),
+                                  ),
+                                )
+                                .toList(),
+                          )
+                        : const Text(
+                            'No services yet.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+          ),
+          const SizedBox(height: 16),
+          const _SectionTitle('Staff'),
+          const SizedBox(height: 8),
+          _CardContainer(
+            child: loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: CircularProgressIndicator(color: primaryPink),
+                    ),
+                  )
+                : (business?.staff.isNotEmpty ?? false)
+                    ? Column(
+                        children: business!.staff
+                            .take(5)
+                            .map(
+                              (m) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _StaffRow(member: m),
+                              ),
+                            )
+                            .toList(),
+                      )
+                    : const Text(
+                        'No staff listed.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingApprovalView extends StatelessWidget {
+  final Business? business;
+  final String status;
+  final String? statusMessage;
+  final bool isLoading;
+
+  const _PendingApprovalView({
+    required this.business,
+    required this.status,
+    required this.statusMessage,
+    required this.isLoading,
+  });
+
+  bool get _isRejected => status == 'rejected';
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return '$day.$month.$year';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading && business == null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 180),
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }
+
+    final headline = _isRejected
+        ? 'Başvurunuz reddedildi'
+        : 'Başvurunuz inceleniyor';
+    final description = statusMessage ??
+        (_isRejected
+            ? 'Detaylı inceleme sonrası başvurunuz reddedildi. Güncellemeler için destek ekibiyle iletişime geçebilirsiniz.'
+            : 'Rendivo ekibi işletme başvurunuzu inceliyor. Onaylandığında bildirim alacaksınız.');
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _isRejected ? const Color(0xFFFFEBEE) : const Color(0xFFFFF3E0),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(
+                  _isRejected ? Icons.error_outline : Icons.schedule_outlined,
+                  color: _isRejected ? Colors.redAccent : Colors.orange,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                headline,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+              if (business?.reviewNotes?.isNotEmpty == true) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Not: ${business!.reviewNotes!}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (business != null) ...[
+          const SizedBox(height: 20),
+          _CardContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Başvuru özeti',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _PendingInfoRow(
+                  label: 'İşletme adı',
+                  value: business!.businessName,
+                ),
+                _PendingInfoRow(
+                  label: 'Durum',
+                  value: _isRejected ? 'Reddedildi' : 'Onay bekliyor',
+                ),
+                _PendingInfoRow(
+                  label: 'Gönderim tarihi',
+                  value: _formatDate(business!.createdAt),
+                ),
+                _PendingInfoRow(
+                  label: 'Son güncelleme',
+                  value: _formatDate(business!.approvedAt ?? business!.rejectedAt),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PendingInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PendingInfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

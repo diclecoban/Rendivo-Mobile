@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { Business, User, StaffMember, Service, Appointment } from '../models';
+import { Business, User, StaffMember, Service, Appointment, BusinessApprovalStatus } from '../models';
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 
@@ -11,6 +11,7 @@ export const getAllBusinesses = async (req: AuthRequest, res: Response): Promise
 
     const whereClause: any = {
       isActive: true,
+      approvalStatus: BusinessApprovalStatus.APPROVED,
     };
 
     // Search by business name or type
@@ -136,11 +137,33 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
 
     // Get business owned by the user
     const business = await Business.findOne({
-      where: { ownerId: userId, isActive: true },
+      where: { ownerId: userId },
     });
 
     if (!business) {
       return res.status(404).json({ message: 'Business not found' });
+    }
+
+    if (business.approvalStatus !== BusinessApprovalStatus.APPROVED) {
+      return res.status(200).json({
+        status:
+          business.approvalStatus === BusinessApprovalStatus.PENDING
+            ? 'pending_approval'
+            : 'rejected',
+        business: {
+          id: business.id,
+          name: business.businessName,
+          approvalStatus: business.approvalStatus,
+          submittedAt: business.createdAt,
+          approvedAt: business.approvedAt,
+          rejectedAt: business.rejectedAt,
+          reviewNotes: business.reviewNotes,
+        },
+        message:
+          business.approvalStatus === BusinessApprovalStatus.PENDING
+            ? 'Business is awaiting admin approval.'
+            : 'Business registration was rejected. Please contact support.',
+      });
     }
 
     const businessId = business.id;
@@ -327,6 +350,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
     const revenueChange = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue * 100).toFixed(1) : '0';
 
     res.json({
+      status: 'ready',
       business: {
         id: business.id,
         name: business.businessName,
@@ -353,5 +377,81 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
   } catch (error: any) {
     console.error('Get business dashboard error:', error);
     res.status(500).json({ message: 'Error fetching dashboard data', error: error.message });
+  }
+};
+
+export const getPendingBusinesses = async (_req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const businesses = await Business.findAll({
+      where: { approvalStatus: BusinessApprovalStatus.PENDING },
+      include: [
+        {
+          model: User,
+          as: 'owner',
+          attributes: ['id', 'fullName', 'firstName', 'lastName', 'email', 'phone'],
+        },
+      ],
+      order: [['createdAt', 'ASC']],
+    });
+
+    res.json(businesses);
+  } catch (error: any) {
+    console.error('Get pending businesses error:', error);
+    res.status(500).json({ message: 'Error fetching pending businesses', error: error.message });
+  }
+};
+
+export const reviewBusinessRegistration = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const { id } = req.params;
+    const { decision, notes } = req.body;
+    const normalizedDecision = typeof decision === 'string' ? decision.toLowerCase() : '';
+
+    if (!['approve', 'reject'].includes(normalizedDecision)) {
+      return res.status(400).json({ message: 'Decision must be either "approve" or "reject".' });
+    }
+
+    const business = await Business.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: 'owner',
+          attributes: ['id', 'fullName', 'firstName', 'lastName', 'email', 'phone'],
+        },
+      ],
+    });
+
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found.' });
+    }
+
+    if (business.approvalStatus !== BusinessApprovalStatus.PENDING) {
+      return res.status(400).json({ message: 'This business has already been reviewed.' });
+    }
+
+    business.reviewedBy = req.user?.id ?? null;
+    business.reviewNotes = notes;
+
+    if (normalizedDecision === 'approve') {
+      business.approvalStatus = BusinessApprovalStatus.APPROVED;
+      business.approvedAt = new Date();
+      business.rejectedAt = null;
+      business.isActive = true;
+    } else {
+      business.approvalStatus = BusinessApprovalStatus.REJECTED;
+      business.rejectedAt = new Date();
+      business.approvedAt = null;
+      business.isActive = false;
+    }
+
+    await business.save();
+
+    res.json({
+      message: `Business ${normalizedDecision}d successfully.`,
+      business,
+    });
+  } catch (error: any) {
+    console.error('Review business registration error:', error);
+    res.status(500).json({ message: 'Error reviewing business registration', error: error.message });
   }
 };

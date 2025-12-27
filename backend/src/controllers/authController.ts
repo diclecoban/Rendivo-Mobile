@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { User, Business, StaffMember } from '../models';
+import { User, Business, StaffMember, BusinessApprovalStatus } from '../models';
 import { UserRole, AuthProvider } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import firebaseAdmin from '../config/firebase';
@@ -67,6 +67,9 @@ export const registerStaff = async (req: AuthRequest, res: Response): Promise<Re
     const business = await Business.findOne({ where: { businessId } });
     if (!business) {
       return res.status(404).json({ message: 'Business not found. Please check your Business ID' });
+    }
+    if (business.approvalStatus !== BusinessApprovalStatus.APPROVED) {
+      return res.status(400).json({ message: 'Business is not approved yet. Please try again later.' });
     }
 
     // Create new staff user
@@ -159,7 +162,8 @@ export const registerBusiness = async (req: AuthRequest, res: Response): Promise
       phone,
       email,
       website,
-      isActive: true,
+      isActive: false,
+      approvalStatus: BusinessApprovalStatus.PENDING,
     });
 
     console.log('Business created:', business.id, business.businessId);
@@ -287,16 +291,21 @@ export const firebaseAuth = async (req: AuthRequest, res: Response): Promise<Res
           ownerId: user.id,
           businessName: additionalData.businessName,
           businessType: additionalData.businessType,
-          isActive: true,
+          isActive: false,
+          approvalStatus: BusinessApprovalStatus.PENDING,
         });
       } else if (role === UserRole.STAFF && additionalData?.businessId) {
         const business = await Business.findOne({ where: { businessId: additionalData.businessId } });
-        if (business) {
+        if (business && business.approvalStatus === BusinessApprovalStatus.APPROVED) {
           await StaffMember.create({
             userId: user.id,
             businessId: business.id,
             isActive: true,
           });
+        } else if (!business) {
+          return res.status(404).json({ message: 'Business not found. Please check your Business ID.' });
+        } else {
+          return res.status(400).json({ message: 'Business is not approved yet. Please try again later.' });
         }
       }
     }
