@@ -338,12 +338,20 @@ class _AppointmentRescheduleScreenState
                   day.day == _selectedDate.day;
               final hasAvailability = _availableSlotsForDay(day).isNotEmpty;
               final isFullyBooked = hasShift && !hasAvailability;
+              final today = DateTime.now();
+              final todayDate = DateTime(today.year, today.month, today.day);
+              final dayDate = DateTime(day.year, day.month, day.day);
+              final isPast = dayDate.isBefore(todayDate);
 
               Color bgColor = Colors.white;
               Color borderColor = Colors.grey.shade300;
               Color textColor = inMonth ? Colors.black : Colors.grey.shade400;
 
-              if (!hasShift) {
+              if (isPast) {
+                bgColor = const Color(0xFFF3F3F3);
+                borderColor = Colors.grey.shade300;
+                textColor = Colors.grey.shade500;
+              } else if (!hasShift) {
                 bgColor = const Color(0xFFF3F3F3);
                 borderColor = Colors.grey.shade300;
                 textColor = Colors.grey.shade500;
@@ -359,7 +367,7 @@ class _AppointmentRescheduleScreenState
 
               return GestureDetector(
                 onTap: () async {
-                  if (!inMonth || !hasShift || isFullyBooked) return;
+                  if (!inMonth || !hasShift || isFullyBooked || isPast) return;
                   setState(() {
                     _selectedDate = day;
                     final avail = _availableSlotsForDay(day);

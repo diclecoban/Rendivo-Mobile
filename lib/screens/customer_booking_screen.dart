@@ -588,12 +588,20 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                   day.year == _selectedDate.year &&
                   day.month == _selectedDate.month &&
                   day.day == _selectedDate.day;
+              final today = DateTime.now();
+              final todayDate = DateTime(today.year, today.month, today.day);
+              final dayDate = DateTime(day.year, day.month, day.day);
+              final isPast = dayDate.isBefore(todayDate);
 
               Color bgColor = Colors.white;
               Color borderColor = Colors.grey.shade300;
               Color textColor = inMonth ? Colors.black : Colors.grey.shade400;
 
-              if (!hasShift) {
+              if (isPast) {
+                bgColor = const Color(0xFFF3F3F3);
+                borderColor = Colors.grey.shade300;
+                textColor = Colors.grey.shade500;
+              } else if (!hasShift) {
                 bgColor = const Color(0xFFF3F3F3);
                 borderColor = Colors.grey.shade300;
                 textColor = Colors.grey.shade500;
@@ -609,7 +617,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
               return GestureDetector(
                 onTap: () async {
-                  if (!inMonth || isFullyBooked || !hasShift) return;
+                  if (!inMonth || isFullyBooked || !hasShift || isPast) return;
                   final monthChanged = day.month != _focusedMonth.month;
                   setState(() {
                     _selectedDate = day;

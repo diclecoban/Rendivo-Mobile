@@ -3,33 +3,31 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
-import '../widgets/business_bottom_nav.dart';
-import 'business_appointments_screen.dart';
-import 'business_dashboard_screen.dart';
-import 'business_services_screen.dart';
-import 'business_staff_screen.dart';
-import 'business_schedule_day_screen.dart';
 
-class BusinessScheduleScreen extends StatefulWidget {
+class BusinessScheduleDayScreen extends StatefulWidget {
+  final DateTime date;
   final bool? isPending;
+  final ShiftItem? initialEditShift;
 
-  const BusinessScheduleScreen({
+  const BusinessScheduleDayScreen({
     super.key,
+    required this.date,
     this.isPending,
+    this.initialEditShift,
   });
 
   @override
-  State<BusinessScheduleScreen> createState() =>
-      _BusinessScheduleScreenState();
+  State<BusinessScheduleDayScreen> createState() =>
+      _BusinessScheduleDayScreenState();
 }
 
-class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
+class _BusinessScheduleDayScreenState extends State<BusinessScheduleDayScreen> {
   final _backend = BackendService.instance;
 
-  DateTime _currentDate = DateTime.now();
   bool _loading = false;
   bool _submitting = false;
   String? _error;
+  bool _changed = false;
 
   List<ShiftItem> _shifts = [];
   List<StaffMember> _staff = [];
@@ -46,14 +44,11 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       _error = null;
     });
 
-    final startDate = _currentDate;
-    final endDate = _currentDate.add(const Duration(days: 34));
-
     try {
       final results = await Future.wait([
         _backend.fetchBusinessShifts(
-          startDate: startDate,
-          endDate: endDate,
+          startDate: widget.date,
+          endDate: widget.date,
         ),
         _backend.fetchShiftStaffMembers(),
       ]);
@@ -61,39 +56,26 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
         _shifts = results[0] as List<ShiftItem>;
         _staff = results[1] as List<StaffMember>;
       });
+      if (widget.initialEditShift != null) {
+        final initial = widget.initialEditShift!;
+        final initialDate = DateTime.tryParse(initial.shiftDate);
+        if (initialDate != null && !_isPastDate(initialDate)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _openShiftDialog(editingShift: initial);
+            }
+          });
+        }
+      }
     } on AppException catch (e) {
       setState(() => _error = e.message);
-    } catch (e) {
+    } catch (_) {
       setState(() => _error = 'Failed to load schedule.');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
     }
-  }
-
-  List<_ScheduleDay> _getDaysInRange(DateTime currentDate) {
-    final dayOfWeek = currentDate.weekday; // 1=Mon
-    final daysToMonday = dayOfWeek == 7 ? 6 : dayOfWeek - 1;
-    final monday = DateTime(
-      currentDate.year,
-      currentDate.month,
-      currentDate.day,
-    ).subtract(Duration(days: daysToMonday));
-
-    return List.generate(
-      35,
-      (index) => _ScheduleDay(
-        date: monday.add(Duration(days: index)),
-      ),
-    );
-  }
-
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return now.year == date.year &&
-        now.month == date.month &&
-        now.day == date.day;
   }
 
   bool _isPastDate(DateTime date) {
@@ -110,9 +92,22 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     return '$year-$month-$day';
   }
 
-  List<ShiftItem> _getShiftsForDate(DateTime date) {
-    final dateStr = _formatDate(date);
-    return _shifts.where((shift) => shift.shiftDate == dateStr).toList();
+  String _formatDateLabel(DateTime date) {
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${monthNames[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   String _staffName(StaffMember staffMember) {
@@ -150,23 +145,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     return colors[index % colors.length];
   }
 
-  void _goToToday() {
-    setState(() => _currentDate = DateTime.now());
-    _loadData();
-  }
-
-  void _goToPreviousWeek() {
-    setState(() => _currentDate = _currentDate.subtract(const Duration(days: 7)));
-    _loadData();
-  }
-
-  void _goToNextWeek() {
-    setState(() => _currentDate = _currentDate.add(const Duration(days: 7)));
-    _loadData();
-  }
-
   Future<void> _openShiftDialog({
-    DateTime? selectedDate,
     ShiftItem? editingShift,
   }) async {
     final isPending = widget.isPending ?? false;
@@ -175,13 +154,13 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       _showSnack('Add staff members before scheduling shifts.');
       return;
     }
-    if (selectedDate != null && _isPastDate(selectedDate)) return;
+    if (_isPastDate(widget.date)) return;
 
     final result = await showDialog<_ShiftDialogResult>(
       context: context,
       builder: (context) => _ShiftEditorDialog(
         staff: _staff,
-        selectedDate: selectedDate ?? DateTime.now(),
+        selectedDate: widget.date,
         editingShift: editingShift,
       ),
     );
@@ -191,7 +170,6 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       await _deleteShift(editingShift);
       return;
     }
-
     if (result.action == _ShiftDialogAction.save) {
       await _saveShift(result, editingShift: editingShift);
     }
@@ -262,7 +240,9 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
               startTime: result.startTime,
               endTime: result.endTime,
             );
-            newShifts.add(created);
+            if (_formatDate(date) == _formatDate(widget.date)) {
+              newShifts.add(created);
+            }
           }
         }
         if (newShifts.isNotEmpty) {
@@ -271,9 +251,10 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           });
         }
       }
+      _changed = true;
     } on AppException catch (e) {
       _showSnack(e.message);
-    } catch (e) {
+    } catch (_) {
       _showSnack('Failed to save shift.');
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -350,9 +331,10 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       setState(() {
         _shifts = _shifts.where((item) => item.id != shift.id).toList();
       });
+      _changed = true;
     } on AppException catch (e) {
       _showSnack(e.message);
-    } catch (e) {
+    } catch (_) {
       _showSnack('Failed to delete shift.');
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -369,109 +351,68 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final isPending = widget.isPending ?? false;
-    final days = _getDaysInRange(_currentDate);
+    final isPast = _isPastDate(widget.date);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        title: const Text(
-          'Staff Schedule',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          IconButton(
-            onPressed: isPending
-                ? null
-                : () => _openShiftDialog(selectedDate: DateTime.now()),
-            icon: const Icon(Icons.add),
-            tooltip: 'Add shift',
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, _changed);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6FA),
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          title: const Text(
+            'Staff Schedule',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          child: _loading
-              ? ListView(
-                  children: const [
-                    SizedBox(height: 160),
-                    Center(
-                      child: CircularProgressIndicator(color: primaryPink),
-                    ),
-                  ],
-                )
-              : _error != null
-                  ? ListView(
-                      children: [
-                        const SizedBox(height: 120),
-                        Center(
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
-                    )
-                  : _buildContent(days),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context, _changed),
+          ),
+          actions: [
+            IconButton(
+              onPressed:
+                  isPending || isPast ? null : () => _openShiftDialog(),
+              icon: const Icon(Icons.add),
+              tooltip: 'Add shift',
+            ),
+          ],
         ),
-      ),
-      bottomNavigationBar: BusinessBottomNav(
-        currentIndex: 3,
-        isPending: isPending,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const BusinessDashboardScreen()),
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessServicesScreen(isPending: isPending),
-              ),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessStaffScreen(isPending: isPending),
-              ),
-            );
-          } else if (index == 4) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessAppointmentsScreen(
-                  isPending: isPending,
-                ),
-              ),
-            );
-          }
-        },
+        body: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            child: _loading
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 160),
+                      Center(
+                        child: CircularProgressIndicator(color: primaryPink),
+                      ),
+                    ],
+                  )
+                : _error != null
+                    ? ListView(
+                        children: [
+                          const SizedBox(height: 120),
+                          Center(
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _buildContent(isPast),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildContent(List<_ScheduleDay> days) {
-    final monthNames = const [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
+  Widget _buildContent(bool isPast) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -484,20 +425,20 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
+              children: [
+                const Text(
                   'Staff Schedule',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Assign and manage staff shifts throughout the month.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  'Shifts for ${_formatDateLabel(widget.date)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
             ElevatedButton.icon(
-              onPressed: () => _openShiftDialog(selectedDate: DateTime.now()),
+              onPressed: isPast ? null : () => _openShiftDialog(),
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Shift'),
               style: ElevatedButton.styleFrom(
@@ -513,108 +454,126 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: _goToPreviousWeek,
-                    icon: const Icon(Icons.chevron_left),
-                    splashRadius: 20,
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.calendar_month, color: primaryPink),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _formatDateLabel(widget.date),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  IconButton(
-                    onPressed: _goToNextWeek,
-                    icon: const Icon(Icons.chevron_right),
-                    splashRadius: 20,
+                ),
+              ),
+              if (isPast)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
-              ),
-            ),
-            Text(
-              '${monthNames[_currentDate.month - 1]} ${_currentDate.year}',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            TextButton.icon(
-              onPressed: _goToToday,
-              icon: const _TodayDot(),
-              label: const Text('Today'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.black87,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              ),
-            ),
-          ],
+                  child: const Text(
+                    'Past',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         if (_staff.isEmpty)
           const Text(
             'No staff members available.',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
-        const SizedBox(height: 12),
-        _CalendarGrid(
-          days: days,
-          isToday: _isToday,
-          isPastDate: _isPastDate,
-          shiftsForDate: _getShiftsForDate,
-          onDayTap: (date) async {
-            if (_isPastDate(date)) return;
-            final changed = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessScheduleDayScreen(
-                  date: date,
-                  isPending: widget.isPending,
+        if (_shifts.isEmpty) ...[
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              isPast
+                  ? 'No shifts were scheduled for this day.'
+                  : 'No shifts yet. Add one to get started.',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 4),
+          ..._shifts.map(
+            (shift) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: InkWell(
+                onTap: isPast ? null : () => _openShiftDialog(editingShift: shift),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _staffColor(shift.staffId),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          size: 16,
+                          color: _staffTextColor(shift.staffId),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _shiftStaffName(shift),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${shift.startTime.substring(0, 5)} - ${shift.endTime.substring(0, 5)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!isPast)
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            );
-            if (changed == true) {
-              _loadData();
-            }
-          },
-          onShiftTap: (shift) async {
-            if (_isPastDate(DateTime.parse(shift.shiftDate))) return;
-            final changed = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessScheduleDayScreen(
-                  date: DateTime.parse(shift.shiftDate),
-                  isPending: widget.isPending,
-                  initialEditShift: shift,
-                ),
-              ),
-            );
-            if (changed == true) {
-              _loadData();
-            }
-          },
-          staffColor: _staffColor,
-          staffTextColor: _staffTextColor,
-          staffName: _shiftStaffName,
-        ),
+            ),
+          ),
+        ],
       ],
     );
   }
-}
-
-class _ScheduleDay {
-  final DateTime date;
-
-  const _ScheduleDay({
-    required this.date,
-  });
 }
 
 enum _ShiftDialogAction { save, delete }
@@ -1101,182 +1060,6 @@ class _BulkOptionRow extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CalendarGrid extends StatelessWidget {
-  final List<_ScheduleDay> days;
-  final bool Function(DateTime date) isToday;
-  final bool Function(DateTime date) isPastDate;
-  final List<ShiftItem> Function(DateTime date) shiftsForDate;
-  final void Function(DateTime date) onDayTap;
-  final void Function(ShiftItem shift) onShiftTap;
-  final Color Function(String staffId) staffColor;
-  final Color Function(String staffId) staffTextColor;
-  final String Function(ShiftItem shift) staffName;
-
-  const _CalendarGrid({
-    required this.days,
-    required this.isToday,
-    required this.isPastDate,
-    required this.shiftsForDate,
-    required this.onDayTap,
-    required this.onShiftTap,
-    required this.staffColor,
-    required this.staffTextColor,
-    required this.staffName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: const [
-            _DayHeader('MON'),
-            _DayHeader('TUE'),
-            _DayHeader('WED'),
-            _DayHeader('THU'),
-            _DayHeader('FRI'),
-            _DayHeader('SAT'),
-            _DayHeader('SUN'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 7,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            mainAxisExtent: 140,
-          ),
-          itemCount: days.length,
-          itemBuilder: (context, index) {
-            final day = days[index];
-            final dayShifts = shiftsForDate(day.date);
-            final isTodayDate = isToday(day.date);
-            final isPast = isPastDate(day.date);
-
-            return InkWell(
-              onTap: isPast ? null : () => onDayTap(day.date),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isPast
-                      ? const Color(0xFFF3F3F3)
-                      : isTodayDate
-                          ? const Color(0xFFFFF1F3)
-                          : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isTodayDate
-                        ? const Color(0xFFFFC1D3)
-                        : const Color(0xFFE8E8EE),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      day.date.day.toString(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isPast
-                            ? Colors.grey.shade500
-                            : isTodayDate
-                                ? primaryPink
-                                : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...dayShifts.map(
-                      (shift) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: GestureDetector(
-                          onTap: isPast ? null : () => onShiftTap(shift),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: staffColor(shift.staffId),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  staffName(shift),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: staffTextColor(shift.staffId),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${shift.startTime.substring(0, 5)} - ${shift.endTime.substring(0, 5)}',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: staffTextColor(shift.staffId),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _TodayDot extends StatelessWidget {
-  const _TodayDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: primaryPink,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _DayHeader extends StatelessWidget {
-  final String label;
-
-  const _DayHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey,
         ),
       ),
     );
