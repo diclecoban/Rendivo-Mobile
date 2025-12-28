@@ -51,7 +51,7 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(_channel);
 
     if (Platform.isAndroid) {
-      await androidPlugin?.requestPermission();
+      await androidPlugin?.requestNotificationsPermission();
     }
 
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
