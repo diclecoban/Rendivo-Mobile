@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/session_service.dart';
 import 'business_schedule_screen.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 import '../widgets/business_bottom_nav.dart';
 import 'business_services_screen.dart';
 import 'business_staff_screen.dart';
@@ -411,7 +412,14 @@ class _DashboardContent extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(userId: user?.id),
+                    ),
+                  );
+                },
                 icon: const Icon(Icons.notifications_none_rounded),
               ),
               PopupMenuButton<String>(

@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/backend_service.dart';
 import '../services/session_service.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 
 class StaffDashboardScreen extends StatefulWidget {
   const StaffDashboardScreen({super.key});
@@ -226,6 +227,17 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NotificationsScreen(userId: user?.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_none_rounded),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {

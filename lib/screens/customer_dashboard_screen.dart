@@ -9,6 +9,7 @@ import 'customer_discover_screen.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 import '../services/backend_service.dart';
+import 'notifications_screen.dart';
 
 
 class CustomerDashboardScreen extends StatefulWidget {
@@ -308,11 +309,24 @@ class _DashboardHomeState extends State<_DashboardHome> {
                           ),
                         ),
                       ],
-                    ),
                   ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'logout') {
+                ),
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NotificationsScreen(
+                          userId: widget.session.currentUser?.id,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_none_rounded),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'logout') {
                         _logout(context);
                       }
                     },
