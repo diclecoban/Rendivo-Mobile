@@ -5,6 +5,7 @@ import {
   getAllBusinessesAdmin,
   approveBusiness,
   rejectBusiness,
+  reviewBusinessApplication,
   getBusinessDetails,
   getAdminStats,
 } from '../controllers/adminController';
@@ -32,5 +33,8 @@ router.patch('/businesses/:id/approve', approveBusiness);
 
 // Reject a business
 router.patch('/businesses/:id/reject', rejectBusiness);
+
+// Combined review route (approve/reject based on payload)
+router.post('/businesses/:id/review', reviewBusinessApplication);
 
 export default router;

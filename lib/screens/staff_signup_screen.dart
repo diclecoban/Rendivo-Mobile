@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import 'email_verification_notice_screen.dart';
@@ -376,16 +377,12 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
         email.isEmpty ||
         password.isEmpty ||
         businessId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields.')),
-      );
+      AppSnackbar.show(context, 'Please fill in all fields.');
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match.')),
-      );
+      AppSnackbar.show(context, 'Passwords do not match.');
       return;
     }
 
@@ -398,10 +395,9 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
         businessId: businessId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created. Please verify your email.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Account created. Please verify your email.',
       );
       Navigator.pushAndRemoveUntil(
         context,
@@ -412,14 +408,10 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
       );
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-up failed: $e')),
-      );
+      AppSnackbar.show(context, 'Sign-up failed: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

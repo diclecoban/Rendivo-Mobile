@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/appointment_service.dart';
 import '../services/backend_service.dart';
@@ -194,24 +195,21 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   Future<void> _book() async {
     final user = _session.currentUser;
     if (user == null || _session.authToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to book an appointment.')),
+      AppSnackbar.show(
+        context,
+        'Please log in to book an appointment.',
       );
       return;
     }
 
     if (_selectedServices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one service.')),
-      );
+      AppSnackbar.show(context, 'Select at least one service.');
       return;
     }
 
     final start = _selectedSlotStart;
     if (start == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select an available time slot.')),
-      );
+      AppSnackbar.show(context, 'Select an available time slot.');
       return;
     }
 
@@ -231,20 +229,14 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
             : _notesController.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Appointment booked!')),
-      );
+      AppSnackbar.show(context, 'Appointment booked!');
       Navigator.pop(context, true);
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not book: $e')),
-      );
+      AppSnackbar.show(context, 'Could not book: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

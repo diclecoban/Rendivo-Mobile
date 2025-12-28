@@ -27,6 +27,7 @@ export interface BusinessAttributes {
   businessId: string; // Unique business identifier for staff to join
   approvalStatus: ApprovalStatus;
   approvedAt?: Date;
+  rejectionReason?: string | null;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -53,6 +54,7 @@ class Business extends Model<BusinessAttributes, BusinessCreationAttributes> imp
   public businessId!: string;
   public approvalStatus!: ApprovalStatus;
   public approvedAt?: Date;
+  public rejectionReason?: string | null;
   public isActive!: boolean;
 
   public readonly createdAt!: Date;
@@ -135,6 +137,10 @@ Business.init(
     },
     approvedAt: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    rejectionReason: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     isActive: {

@@ -209,3 +209,56 @@ export const getAdminStats = async (_req: AuthRequest, res: Response): Promise<R
     res.status(500).json({ message: 'Error fetching admin stats', error: error.message });
   }
 };
+
+// Review a business application (approve or reject with single endpoint)
+export const reviewBusinessApplication = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const { id } = req.params;
+    const { decision, notes } = req.body;
+
+    if (!decision || !['approve', 'reject'].includes(decision)) {
+      return res.status(400).json({ message: 'Valid decision value is required (approve or reject).' });
+    }
+
+    const business = await Business.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: 'owner',
+          attributes: ['id', 'email', 'fullName'],
+        },
+      ],
+    });
+
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    if (business.approvalStatus !== ApprovalStatus.PENDING) {
+      return res.status(400).json({ message: `Business is already ${business.approvalStatus}` });
+    }
+
+    if (decision === 'approve') {
+      await business.update({
+        approvalStatus: ApprovalStatus.APPROVED,
+        approvedAt: new Date(),
+        rejectionReason: null,
+        isActive: true,
+      });
+    } else {
+      await business.update({
+        approvalStatus: ApprovalStatus.REJECTED,
+        isActive: false,
+        rejectionReason: notes?.trim() || null,
+      });
+    }
+
+    res.json({
+      message: decision === 'approve' ? 'Business approved successfully' : 'Business rejected successfully',
+      business,
+    });
+  } catch (error: any) {
+    console.error('Review business error:', error);
+    res.status(500).json({ message: 'Error reviewing business', error: error.message });
+  }
+};

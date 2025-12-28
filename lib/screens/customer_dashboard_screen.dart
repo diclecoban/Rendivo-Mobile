@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/session_service.dart';
 import 'customer_appointments_screen.dart';
@@ -493,12 +494,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   time: timeRange,
                   actions: const ['Reschedule', 'Cancel'],
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Open the My Appointments tab to view full appointment details.',
-                        ),
-                      ),
+                    AppSnackbar.show(
+                      context,
+                      'Open the My Appointments tab to view full appointment details.',
                     );
                   },
                 ),

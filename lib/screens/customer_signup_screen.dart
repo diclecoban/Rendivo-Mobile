@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/utils/validators.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import 'email_verification_notice_screen.dart';
@@ -75,10 +76,9 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
     }
 
     if (!_isTermsAccepted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please accept the Terms of Service to continue.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Please accept the Terms of Service to continue.',
       );
       return;
     }
@@ -101,11 +101,9 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Account created. Please verify your email to continue.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Account created. Please verify your email to continue.',
       );
       Navigator.pushAndRemoveUntil(
         context,
@@ -115,18 +113,10 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
         (route) => false,
       );
     } on AppException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (e) {
       debugPrint('Signup error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sign-up failed: $e',
-          ),
-        ),
-      );
+      AppSnackbar.show(context, 'Sign-up failed: $e');
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/utils/validators.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
@@ -69,14 +70,11 @@ class _EmailVerificationCodeScreenState
       if (!mounted) return;
       setState(() => _verified = true);
     } on AppException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Something went wrong. Please try again.',
       );
     } finally {
       if (mounted) {

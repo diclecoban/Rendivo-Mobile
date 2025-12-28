@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_snackbar.dart';
 import '../../models/app_models.dart';
 import '../../services/backend_service.dart';
 
@@ -79,26 +80,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _pendingApplications.removeWhere((item) => item.id == application.id);
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? '${application.businessName} onaylandi.'
-                : '${application.businessName} reddedildi.',
-          ),
-        ),
+      AppSnackbar.show(
+        context,
+        approve
+            ? '${application.businessName} onaylandi.'
+            : '${application.businessName} reddedildi.',
       );
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Islem tamamlanamadi. Lutfen tekrar deneyin.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Islem tamamlanamadi. Lutfen tekrar deneyin.',
       );
     } finally {
       if (mounted) {

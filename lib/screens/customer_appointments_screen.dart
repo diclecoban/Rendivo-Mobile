@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
 import '../services/session_service.dart';
@@ -68,19 +69,13 @@ class _CustomerAppointmentsScreenState
     try {
       await _backend.cancelAppointment(appointment.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Appointment cancelled.')),
-        );
+        AppSnackbar.show(context, 'Appointment cancelled.');
         _loadAppointments();
       }
     } on AppException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel: $e')),
-      );
+      AppSnackbar.show(context, 'Failed to cancel: $e');
     }
   }
 
@@ -106,21 +101,15 @@ class _CustomerAppointmentsScreenState
         endAt: newEnd,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Appointment rescheduled.')),
-        );
+        AppSnackbar.show(context, 'Appointment rescheduled.');
         _loadAppointments();
       }
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      AppSnackbar.show(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to reschedule: $e')),
-      );
+      AppSnackbar.show(context, 'Failed to reschedule: $e');
     }
   }
 

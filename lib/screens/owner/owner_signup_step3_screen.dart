@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_snackbar.dart';
 import '../../models/owner_signup.dart';
 import '../../services/backend_service.dart';
 import '../email_verification_notice_screen.dart';
@@ -31,10 +32,9 @@ class _BusinessOwnerSignUpStep3ScreenState
     try {
       await _backend.registerBusinessOwner(_model);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created. Please verify your email.'),
-        ),
+      AppSnackbar.show(
+        context,
+        'Account created. Please verify your email.',
       );
       Navigator.pushAndRemoveUntil(
         context,

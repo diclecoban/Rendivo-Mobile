@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
 import '../widgets/business_bottom_nav.dart';
@@ -330,9 +331,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    AppSnackbar.show(context, message);
   }
 
   @override
