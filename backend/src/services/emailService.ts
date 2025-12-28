@@ -10,6 +10,36 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const BRAND_NAME = process.env.EMAIL_BRAND_NAME || 'Rendivo';
+const BRAND_COLOR = process.env.EMAIL_BRAND_COLOR || '#E91E63';
+const BRAND_ACCENT = process.env.EMAIL_BRAND_ACCENT || '#FCE4EC';
+const BRAND_LOGO = process.env.EMAIL_LOGO_URL;
+
+const renderBrandHeader = (): string => {
+  if (BRAND_LOGO) {
+    return `<img src="${BRAND_LOGO}" alt="${BRAND_NAME} logo" style="max-width:140px;height:auto;margin-bottom:8px;"/>`;
+  }
+  return `<div style="font-size:20px;font-weight:700;color:${BRAND_COLOR};">${BRAND_NAME}</div>`;
+};
+
+const renderEmailLayout = (title: string, body: string): string => `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:${BRAND_ACCENT}; padding:32px;">
+    <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,0.08);">
+      <div style="text-align:center;padding:28px 24px 8px;">
+        ${renderBrandHeader()}
+        <p style="margin:0;color:#666;font-size:14px;">${BRAND_NAME} notifications</p>
+      </div>
+      <div style="padding:0 24px 24px;border-top:4px solid ${BRAND_COLOR};">
+        <h2 style="color:${BRAND_COLOR};font-size:22px;margin-top:24px;">${title}</h2>
+        ${body}
+        <p style="font-size:12px;color:#999;border-top:1px solid #eee;margin-top:24px;padding-top:16px;">
+          This message was sent automatically by ${BRAND_NAME}. Please do not reply directly to this email.
+        </p>
+      </div>
+    </div>
+  </div>
+`;
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -49,7 +79,7 @@ class EmailService {
 
     await this.sendEmail({
       to: email,
-      subject: 'Rendivo - Verify your email',
+      subject: 'Rendivo - Verify your Email',
       html,
     });
   }
@@ -66,7 +96,7 @@ class EmailService {
 
     await this.sendEmail({
       to: email,
-      subject: 'Rendivo - Welcome',
+      subject: 'Rendivo - Welcome!',
       html,
     });
   }
@@ -89,7 +119,7 @@ class EmailService {
 
     await this.sendEmail({
       to: email,
-      subject: 'Rendivo - Password reset code',
+      subject: 'Rendivo - Reset Password',
       html,
     });
   }
@@ -102,20 +132,20 @@ class EmailService {
     startTime: string;
     endTime: string;
   }): Promise<void> {
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2>Your appointment is confirmed ✨</h2>
-        <p>Hi ${options.name ?? 'there'},</p>
-        <p>Your booking with <strong>${options.businessName}</strong> is confirmed.</p>
-        <p><strong>Date:</strong> ${options.appointmentDate}<br/>
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.name ?? 'there'},</p>
+        <p style="margin:0 0 12px;">We are pleased to confirm your booking with <strong>${options.businessName}</strong>.</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${options.appointmentDate}<br/>
            <strong>Time:</strong> ${options.startTime} - ${options.endTime}</p>
-        <p>You can manage this appointment inside the Rendivo app.</p>
+        <p style="margin:0;">You can review or update this appointment anytime inside the ${BRAND_NAME} application.</p>
       </div>
     `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Your appointment is confirmed ✨</span>', body);
 
     await this.sendEmail({
       to: options.email,
-      subject: 'Rendivo - Appointment Confirmed',
+      subject: `Rendivo - Appointment Confirmed`,
       html,
     });
   }
@@ -127,18 +157,46 @@ class EmailService {
     appointmentDate: string;
     startTime: string;
   }): Promise<void> {
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2>Your appointment was cancelled</h2>
-        <p>Hi ${options.name ?? 'there'},</p>
-        <p>Your booking with <strong>${options.businessName}</strong> scheduled on <strong>${options.appointmentDate}</strong> at <strong>${options.startTime}</strong> has been cancelled.</p>
-        <p>You can book a new time any moment from the Rendivo app.</p>
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.name ?? 'there'},</p>
+        <p style="margin:0 0 12px;">This is to confirm that your booking with <strong>${options.businessName}</strong> scheduled on <strong>${options.appointmentDate}</strong> at <strong>${options.startTime}</strong> was cancelled.</p>
+        <p style="margin:0;">Whenever you are ready, you can choose a new time directly inside the ${BRAND_NAME} application.</p>
       </div>
     `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Your appointment was cancelled 😔</span>', body);
 
     await this.sendEmail({
       to: options.email,
-      subject: 'Rendivo - Appointment Cancelled',
+      subject: `Rendivo - Appointment Cancelled`,
+      html,
+    });
+  }
+
+  static async sendAppointmentRescheduled(options: {
+    email: string;
+    name?: string;
+    businessName: string;
+    previousDate: string;
+    previousStartTime: string;
+    newDate: string;
+    newStartTime: string;
+    newEndTime: string;
+  }): Promise<void> {
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.name ?? 'there'},</p>
+        <p style="margin:0 0 12px;">Your appointment with <strong>${options.businessName}</strong> has been rescheduled.</p>
+        <p style="margin:0 0 8px;"><strong>Previous:</strong> ${options.previousDate} at ${options.previousStartTime}</p>
+        <p style="margin:0 0 12px;"><strong>New schedule:</strong> ${options.newDate} from ${options.newStartTime} to ${options.newEndTime}</p>
+        <p style="margin:0;">If the new time is not suitable, you can adjust it inside the ${BRAND_NAME} application.</p>
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Your appointment was rescheduled ✍🏼</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - Appointment rescheduled`,
       html,
     });
   }
