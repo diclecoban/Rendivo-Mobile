@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
@@ -8,7 +9,6 @@ import 'business_appointments_screen.dart';
 import 'business_dashboard_screen.dart';
 import 'business_services_screen.dart';
 import 'business_staff_screen.dart';
-import 'business_schedule_day_screen.dart';
 
 class BusinessScheduleScreen extends StatefulWidget {
   final bool? isPending;
@@ -569,36 +569,16 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           isToday: _isToday,
           isPastDate: _isPastDate,
           shiftsForDate: _getShiftsForDate,
-          onDayTap: (date) async {
+          onDayTap: (date) {
             if (_isPastDate(date)) return;
-            final changed = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessScheduleDayScreen(
-                  date: date,
-                  isPending: widget.isPending,
-                ),
-              ),
-            );
-            if (changed == true) {
-              _loadData();
-            }
+            _openShiftDialog(selectedDate: date);
           },
-          onShiftTap: (shift) async {
+          onShiftTap: (shift) {
             if (_isPastDate(DateTime.parse(shift.shiftDate))) return;
-            final changed = await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => BusinessScheduleDayScreen(
-                  date: DateTime.parse(shift.shiftDate),
-                  isPending: widget.isPending,
-                  initialEditShift: shift,
-                ),
-              ),
+            _openShiftDialog(
+              selectedDate: DateTime.parse(shift.shiftDate),
+              editingShift: shift,
             );
-            if (changed == true) {
-              _loadData();
-            }
           },
           staffColor: _staffColor,
           staffTextColor: _staffTextColor,
@@ -659,6 +639,8 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
   StaffMember? _selectedStaff;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
+  late final TextEditingController _startController;
+  late final TextEditingController _endController;
   bool _applyToWeek = false;
   bool _applyToMonth = false;
 
@@ -676,6 +658,19 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
     } else if (widget.staff.isNotEmpty) {
       _selectedStaff = widget.staff.first;
     }
+    _startController = TextEditingController(
+      text: _startTime != null ? _formatTime(_startTime) : '',
+    );
+    _endController = TextEditingController(
+      text: _endTime != null ? _formatTime(_endTime) : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _startController.dispose();
+    _endController.dispose();
+    super.dispose();
   }
 
   TimeOfDay? _parseTime(String value) {
@@ -686,6 +681,18 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
       hour: int.tryParse(parts[0]) ?? 0,
       minute: int.tryParse(parts[1]) ?? 0,
     );
+  }
+
+  TimeOfDay? _parseTimeInput(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final parts = trimmed.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return TimeOfDay(hour: hour, minute: minute);
   }
 
   String _formatDate(DateTime date) {
@@ -723,26 +730,6 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
     }
   }
 
-  Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _startTime ?? TimeOfDay.now(),
-    );
-    if (picked != null) {
-      setState(() => _startTime = picked);
-    }
-  }
-
-  Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _endTime ?? TimeOfDay.now(),
-    );
-    if (picked != null) {
-      setState(() => _endTime = picked);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.editingShift != null;
@@ -750,6 +737,8 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -882,76 +871,72 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
                   Row(
                     children: [
                       Expanded(
-                        child: InkWell(
-                          onTap: _pickStartTime,
-                          borderRadius: BorderRadius.circular(10),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
+                        child: TextFormField(
+                          controller: _startController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            _TimeInputFormatter(),
+                          ],
+                          decoration: InputDecoration(
+                            hintText: '--:--',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _formatTime(_startTime),
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                                Icon(Icons.access_time,
-                                    size: 16, color: Colors.grey.shade600),
-                              ],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            suffixIcon: Icon(
+                              Icons.access_time,
+                              size: 16,
+                              color: Colors.grey.shade600,
                             ),
                           ),
+                          onChanged: (value) =>
+                              setState(() => _startTime = _parseTimeInput(value)),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: InkWell(
-                          onTap: _pickEndTime,
-                          borderRadius: BorderRadius.circular(10),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide:
-                                    BorderSide(color: Colors.grey.shade300),
-                              ),
+                        child: TextFormField(
+                          controller: _endController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            _TimeInputFormatter(),
+                          ],
+                          decoration: InputDecoration(
+                            hintText: '--:--',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _formatTime(_endTime),
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                                Icon(Icons.access_time,
-                                    size: 16, color: Colors.grey.shade600),
-                              ],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            suffixIcon: Icon(
+                              Icons.access_time,
+                              size: 16,
+                              color: Colors.grey.shade600,
                             ),
                           ),
+                          onChanged: (value) =>
+                              setState(() => _endTime = _parseTimeInput(value)),
                         ),
                       ),
                     ],
@@ -988,6 +973,42 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
                               });
                             },
                           ),
+                          if (_applyToWeek || _applyToMonth) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF8DB),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _applyToMonth
+                                          ? 'This shift will be added for the entire month (from today onwards)'
+                                          : 'This shift will be added for the entire week (from today onwards)',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1103,6 +1124,27 @@ class _BulkOptionRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TimeInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final trimmed = digits.length > 4 ? digits.substring(0, 4) : digits;
+    String result;
+    if (trimmed.length <= 2) {
+      result = trimmed;
+    } else {
+      result = '${trimmed.substring(0, 2)}:${trimmed.substring(2)}';
+    }
+    return TextEditingValue(
+      text: result,
+      selection: TextSelection.collapsed(offset: result.length),
     );
   }
 }
