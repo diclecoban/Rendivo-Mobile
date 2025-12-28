@@ -93,6 +93,55 @@ class EmailService {
       html,
     });
   }
+
+  static async sendAppointmentConfirmation(options: {
+    email: string;
+    name?: string;
+    businessName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+  }): Promise<void> {
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2>Your appointment is confirmed ✨</h2>
+        <p>Hi ${options.name ?? 'there'},</p>
+        <p>Your booking with <strong>${options.businessName}</strong> is confirmed.</p>
+        <p><strong>Date:</strong> ${options.appointmentDate}<br/>
+           <strong>Time:</strong> ${options.startTime} - ${options.endTime}</p>
+        <p>You can manage this appointment inside the Rendivo app.</p>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: options.email,
+      subject: 'Rendivo - Appointment Confirmed',
+      html,
+    });
+  }
+
+  static async sendAppointmentCancellation(options: {
+    email: string;
+    name?: string;
+    businessName: string;
+    appointmentDate: string;
+    startTime: string;
+  }): Promise<void> {
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2>Your appointment was cancelled</h2>
+        <p>Hi ${options.name ?? 'there'},</p>
+        <p>Your booking with <strong>${options.businessName}</strong> scheduled on <strong>${options.appointmentDate}</strong> at <strong>${options.startTime}</strong> has been cancelled.</p>
+        <p>You can book a new time any moment from the Rendivo app.</p>
+      </div>
+    `;
+
+    await this.sendEmail({
+      to: options.email,
+      subject: 'Rendivo - Appointment Cancelled',
+      html,
+    });
+  }
 }
 
 export default EmailService;

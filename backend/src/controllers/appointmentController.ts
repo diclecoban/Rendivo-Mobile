@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { AuthRequest } from '../middleware/auth';
 import { Appointment, Service, Business, StaffMember, User, AppointmentService } from '../models';
 import { AppointmentStatus } from '../models/Appointment';
+import EmailService from '../services/emailService';
 
 // Create a new appointment
 export const createAppointment = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -88,8 +89,32 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
             attributes: ['fullName'],
           }],
         },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['id', 'fullName', 'email'],
+        },
       ],
     });
+
+    const customerEmail = (req.user as User)?.email || completeAppointment?.customer?.email;
+    if (customerEmail && completeAppointment) {
+      const dateLabel = new Date(completeAppointment.appointmentDate).toDateString();
+      const startLabel = completeAppointment.startTime.substring(0, 5);
+      const endLabel = completeAppointment.endTime.substring(0, 5);
+      try {
+        await EmailService.sendAppointmentConfirmation({
+          email: customerEmail,
+          name: completeAppointment.customer?.fullName || (req.user as User)?.fullName,
+          businessName: completeAppointment.business?.businessName || 'Rendivo Partner',
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+          endTime: endLabel,
+        });
+      } catch (emailError) {
+        console.error('Failed to send appointment confirmation email:', emailError);
+      }
+    }
 
     res.status(201).json({
       message: 'Appointment created successfully',
@@ -308,7 +333,20 @@ export const updateAppointmentStatus = async (req: AuthRequest, res: Response): 
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const appointment = await Appointment.findByPk(id);
+    const appointment = await Appointment.findByPk(id, {
+      include: [
+        {
+          model: Business,
+          as: 'business',
+          attributes: ['businessName'],
+        },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['email', 'fullName'],
+        },
+      ],
+    });
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
@@ -355,7 +393,29 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    const appointmentDate = appointment.appointmentDate;
+    const startTime = appointment.startTime;
+    const businessName = appointment.business?.businessName || 'Rendivo Partner';
+    const customerEmail = appointment.customer?.email;
+    const customerName = appointment.customer?.fullName;
+
     await appointment.destroy();
+
+    if (customerEmail) {
+      try {
+        const dateLabel = new Date(appointmentDate).toDateString();
+        const startLabel = startTime.substring(0, 5);
+        await EmailService.sendAppointmentCancellation({
+          email: customerEmail,
+          name: customerName,
+          businessName,
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+        });
+      } catch (emailError) {
+        console.error('Failed to send cancellation email:', emailError);
+      }
+    }
 
     res.json({
       message: 'Appointment cancelled successfully',

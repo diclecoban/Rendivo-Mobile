@@ -1,5 +1,9 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
+import User from './User';
+import Business from './Business';
+import StaffMember from './StaffMember';
+import Service from './Service';
 
 export enum AppointmentStatus {
   PENDING = 'pending',
@@ -43,6 +47,11 @@ class Appointment extends Model<AppointmentAttributes, AppointmentCreationAttrib
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  public readonly customer?: User;
+  public readonly business?: Business;
+  public readonly staff?: StaffMember;
+  public readonly services?: Service[];
 }
 
 Appointment.init(
