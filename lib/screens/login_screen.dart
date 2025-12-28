@@ -5,6 +5,8 @@ import '../core/utils/validators.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
+import '../services/backend_service.dart';
+import '../services/notification_service.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'business_dashboard_screen.dart';
 import 'customer_dashboard_screen.dart';
@@ -59,6 +61,20 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final user = await AuthService.signIn(email, password);
       if (!mounted) return;
+
+      final token = await NotificationService.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        try {
+          await BackendService.instance.registerDeviceToken(token: token);
+          NotificationService.instance.listenForTokenRefresh((newToken) async {
+            try {
+              await BackendService.instance.registerDeviceToken(token: newToken);
+            } catch (_) {}
+          });
+        } catch (_) {
+          // Ignore token registration failures to avoid blocking login.
+        }
+      }
 
       Widget targetScreen;
       switch (user.role) {

@@ -5,6 +5,7 @@ import appointmentRoutes from './appointments';
 import businessRoutes from './businesses';
 import shiftRoutes from './shifts';
 import adminRoutes from './admin';
+import deviceTokenRoutes from './deviceTokens';
 
 const router = express.Router();
 
@@ -15,6 +16,7 @@ router.use('/', appointmentRoutes);
 router.use('/', businessRoutes);
 router.use('/shifts', shiftRoutes);
 router.use('/admin', adminRoutes);
+router.use('/users', deviceTokenRoutes);
 
 // Health check endpoint
 router.get('/health', (_req, res) => {

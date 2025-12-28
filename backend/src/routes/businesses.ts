@@ -5,6 +5,8 @@ import {
   getBusinessStaff,
   getBusinessDashboard,
   getBusinessAvailability,
+  removeStaffMember,
+  sendBusinessTestNotification,
 } from '../controllers/businessController';
 import { authenticate } from '../middleware/auth';
 
@@ -18,5 +20,7 @@ router.get('/businesses/:id/availability', getBusinessAvailability);
 
 // Protected routes
 router.get('/business/dashboard', authenticate, getBusinessDashboard);
+router.delete('/business/staff/:id', authenticate, removeStaffMember);
+router.post('/businesses/:businessId/test-push', authenticate, sendBusinessTestNotification);
 
 export default router;

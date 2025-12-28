@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/widgets/app_snackbar.dart';
@@ -312,9 +313,12 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
       Navigator.pop(context, true);
     } on AppException catch (e) {
       if (!mounted) return;
+      debugPrint('Booking failed: ${e.message}');
+      debugPrint('Booking error details: ${e.details}');
       AppSnackbar.show(context, e.message);
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Booking unexpected error: $e');
       AppSnackbar.show(context, 'Could not book: $e');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

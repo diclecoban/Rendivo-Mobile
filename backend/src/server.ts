@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDatabase } from './config/database';
 import routes from './routes';
+import { runAppointmentReminders } from './services/reminderService';
 
 // Load environment variables
 dotenv.config();
@@ -79,6 +80,21 @@ const startServer = async () => {
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🌐 API URL: http://localhost:${PORT}/api`);
     });
+
+    const reminderIntervalMinutes = Number(
+      process.env.REMINDER_INTERVAL_MINUTES || 60
+    );
+    if (reminderIntervalMinutes > 0) {
+      const intervalMs = reminderIntervalMinutes * 60 * 1000;
+      setInterval(() => {
+        runAppointmentReminders().catch((error) =>
+          console.error('Reminder job error:', error)
+        );
+      }, intervalMs);
+      runAppointmentReminders().catch((error) =>
+        console.error('Reminder job error:', error)
+      );
+    }
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

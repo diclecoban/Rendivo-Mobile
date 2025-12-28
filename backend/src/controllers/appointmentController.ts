@@ -3,7 +3,6 @@ import { Op } from 'sequelize';
 import { AuthRequest } from '../middleware/auth';
 import { Appointment, Service, Business, StaffMember, User, AppointmentService } from '../models';
 import { AppointmentStatus } from '../models/Appointment';
-import EmailService from '../services/emailService';
 
 // Create a new appointment
 export const createAppointment = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -53,7 +52,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
       endTime,
       totalPrice,
       totalDuration,
-      status: AppointmentStatus.CONFIRMED,
+      status: AppointmentStatus.PENDING,
       notes,
     });
 
@@ -95,11 +94,6 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
             as: 'user',
             attributes: ['fullName', 'firstName', 'lastName', 'email'],
           }],
-        },
-        {
-          model: User,
-          as: 'customer',
-          attributes: ['id', 'fullName', 'email'],
         },
       ],
     });
@@ -655,9 +649,6 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
       }
     }
 
-    const previousDate = appointment.appointmentDate;
-    const previousStartTime = appointment.startTime;
-
     // Update appointment
     const updateData: any = {
       appointmentDate,
@@ -707,35 +698,8 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
           }],
           attributes: ['id', 'position'],
         },
-        {
-          model: User,
-          as: 'customer',
-          attributes: ['id', 'fullName', 'email'],
-        },
       ],
     });
-
-    if (updatedAppointment?.customer?.email && updatedAppointment.business) {
-      try {
-        const previousDateLabel = new Date(previousDate).toDateString();
-        const previousStartLabel = previousStartTime.substring(0, 5);
-        const newDateLabel = new Date(updatedAppointment.appointmentDate).toDateString();
-        const newStartLabel = updatedAppointment.startTime.substring(0, 5);
-        const newEndLabel = updatedAppointment.endTime.substring(0, 5);
-        await EmailService.sendAppointmentRescheduled({
-          email: updatedAppointment.customer.email,
-          name: updatedAppointment.customer.fullName,
-          businessName: updatedAppointment.business.businessName,
-          previousDate: previousDateLabel,
-          previousStartTime: previousStartLabel,
-          newDate: newDateLabel,
-          newStartTime: newStartLabel,
-          newEndTime: newEndLabel,
-        });
-      } catch (emailError) {
-        console.error('Failed to send reschedule email:', emailError);
-      }
-    }
 
     res.json({
       message: 'Appointment rescheduled successfully',
@@ -744,5 +708,72 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
   } catch (error: any) {
     console.error('Reschedule appointment error:', error);
     res.status(500).json({ message: 'Error rescheduling appointment', error: error.message });
+  }
+};
+
+// Public: Get booked days and slots for a business within a date range
+export const getBusinessAvailability = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const { businessId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!businessId) {
+      return res.status(400).json({ message: 'businessId is required' });
+    }
+
+    const business = await Business.findByPk(businessId);
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    const today = new Date();
+    const start = startDate ? new Date(startDate as string) : today;
+    const end = endDate
+      ? new Date(endDate as string)
+      : new Date(today.getFullYear(), today.getMonth(), today.getDate() + 31);
+
+    const appointments = await Appointment.findAll({
+      where: {
+        businessId: business.id,
+        status: { [Op.ne]: AppointmentStatus.CANCELLED },
+        appointmentDate: {
+          [Op.gte]: start,
+          [Op.lte]: end,
+        },
+      },
+      attributes: ['id', 'appointmentDate', 'startTime', 'endTime', 'staffId', 'status'],
+      order: [['appointmentDate', 'ASC'], ['startTime', 'ASC']],
+    });
+
+    const bookedDays = new Set<string>();
+    const bookedSlots = appointments.map((appt) => {
+      const dateStr = appt.appointmentDate
+        ? new Date(appt.appointmentDate).toISOString().split('T')[0]
+        : '';
+      if (dateStr) bookedDays.add(dateStr);
+      const startAt = `${dateStr}T${appt.startTime}`;
+      const endAt = `${dateStr}T${appt.endTime}`;
+      return {
+        appointmentId: appt.id,
+        date: dateStr,
+        start: appt.startTime,
+        end: appt.endTime,
+        startAt,
+        endAt,
+        staffId: appt.staffId,
+        status: appt.status,
+      };
+    });
+
+    res.json({
+      businessId: business.id,
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      bookedDays: Array.from(bookedDays),
+      bookedSlots,
+    });
+  } catch (error: any) {
+    console.error('Get business availability error:', error);
+    res.status(500).json({ message: 'Error fetching availability', error: error.message });
   }
 };

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'screens/login_screen.dart';
 import 'services/backend_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await NotificationService.instance.initialize();
   const apiBase = String.fromEnvironment('API_BASE_URL');
   if (apiBase.isNotEmpty) {
     BackendService.instance.setBaseUrl(apiBase);
