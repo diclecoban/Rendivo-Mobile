@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
@@ -26,7 +25,7 @@ class BusinessScheduleScreen extends StatefulWidget {
 class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   final _backend = BackendService.instance;
 
-  DateTime _currentDate = DateTime.now();
+  late DateTime _currentDate;
   bool _loading = false;
   bool _submitting = false;
   String? _error;
@@ -37,6 +36,8 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _currentDate = DateTime(now.year, now.month, 1);
     _loadData();
   }
 
@@ -46,8 +47,8 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
       _error = null;
     });
 
-    final startDate = _currentDate;
-    final endDate = _currentDate.add(const Duration(days: 34));
+    final startDate = _calendarStartDate(_currentDate);
+    final endDate = startDate.add(const Duration(days: 41));
 
     try {
       final results = await Future.wait([
@@ -72,19 +73,18 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     }
   }
 
-  List<_ScheduleDay> _getDaysInRange(DateTime currentDate) {
-    final dayOfWeek = currentDate.weekday; // 1=Mon
-    final daysToMonday = dayOfWeek == 7 ? 6 : dayOfWeek - 1;
-    final monday = DateTime(
-      currentDate.year,
-      currentDate.month,
-      currentDate.day,
-    ).subtract(Duration(days: daysToMonday));
+  DateTime _calendarStartDate(DateTime date) {
+    final firstOfMonth = DateTime(date.year, date.month, 1);
+    final daysToMonday = (firstOfMonth.weekday + 6) % 7;
+    return firstOfMonth.subtract(Duration(days: daysToMonday));
+  }
 
+  List<_ScheduleDay> _getDaysInRange(DateTime currentDate) {
+    final start = _calendarStartDate(currentDate);
     return List.generate(
-      35,
+      42,
       (index) => _ScheduleDay(
-        date: monday.add(Duration(days: index)),
+        date: start.add(Duration(days: index)),
       ),
     );
   }
@@ -108,6 +108,27 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '$year-$month-$day';
+  }
+
+  String _readableDateLabel(DateTime date) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final weekday = weekdays[(date.weekday - 1) % 7];
+    final month = months[date.month - 1];
+    return '$weekday, $month ${date.day}, ${date.year}';
   }
 
   List<ShiftItem> _getShiftsForDate(DateTime date) {
@@ -151,18 +172,150 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   }
 
   void _goToToday() {
-    setState(() => _currentDate = DateTime.now());
+    final now = DateTime.now();
+    setState(() => _currentDate = DateTime(now.year, now.month, 1));
     _loadData();
   }
 
   void _goToPreviousWeek() {
-    setState(() => _currentDate = _currentDate.subtract(const Duration(days: 7)));
+    setState(
+      () => _currentDate = DateTime(
+        _currentDate.year,
+        _currentDate.month - 1,
+        1,
+      ),
+    );
     _loadData();
   }
 
   void _goToNextWeek() {
-    setState(() => _currentDate = _currentDate.add(const Duration(days: 7)));
+    setState(
+      () => _currentDate = DateTime(
+        _currentDate.year,
+        _currentDate.month + 1,
+        1,
+      ),
+    );
     _loadData();
+  }
+
+  Future<void> _showShiftDetails(ShiftItem shift) async {
+    final parsedDate = DateTime.tryParse(shift.shiftDate);
+    final dateLabel = parsedDate != null
+        ? _readableDateLabel(parsedDate)
+        : shift.shiftDate;
+    final timeRange =
+        '${shift.startTime.substring(0, 5)} - ${shift.endTime.substring(0, 5)}';
+    final isPastShift =
+        parsedDate != null ? _isPastDate(parsedDate) : false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: primaryPink.withOpacity(0.15),
+                  child: Text(
+                    shift.staffName.isNotEmpty
+                        ? shift.staffName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: primaryPink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shift.staffName.isNotEmpty
+                            ? shift.staffName
+                            : 'Staff Member',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Shift Time',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              timeRange,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isPastShift
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        _openShiftDialog(
+                          selectedDate: parsedDate ?? DateTime.now(),
+                          editingShift: shift,
+                        );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryPink,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Edit Shift',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openShiftDialog({
@@ -574,11 +727,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
             _openShiftDialog(selectedDate: date);
           },
           onShiftTap: (shift) {
-            if (_isPastDate(DateTime.parse(shift.shiftDate))) return;
-            _openShiftDialog(
-              selectedDate: DateTime.parse(shift.shiftDate),
-              editingShift: shift,
-            );
+            _showShiftDetails(shift);
           },
           staffColor: _staffColor,
           staffTextColor: _staffTextColor,
@@ -683,18 +832,6 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
     );
   }
 
-  TimeOfDay? _parseTimeInput(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    final parts = trimmed.split(':');
-    if (parts.length != 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return TimeOfDay(hour: hour, minute: minute);
-  }
-
   String _formatDate(DateTime date) {
     final year = date.year;
     final month = date.month.toString().padLeft(2, '0');
@@ -727,6 +864,36 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickStartTime() async {
+    FocusScope.of(context).requestFocus(FocusNode());
+    final initial = _startTime ?? TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+    if (picked != null) {
+      setState(() {
+        _startTime = picked;
+        _startController.text = _formatTime(picked);
+      });
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    FocusScope.of(context).requestFocus(FocusNode());
+    final initial = _endTime ?? TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+    if (picked != null) {
+      setState(() {
+        _endTime = picked;
+        _endController.text = _formatTime(picked);
+      });
     }
   }
 
@@ -873,11 +1040,7 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _startController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            _TimeInputFormatter(),
-                          ],
+                          readOnly: true,
                           decoration: InputDecoration(
                             hintText: '--:--',
                             contentPadding: const EdgeInsets.symmetric(
@@ -900,19 +1063,14 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
                               color: Colors.grey.shade600,
                             ),
                           ),
-                          onChanged: (value) =>
-                              setState(() => _startTime = _parseTimeInput(value)),
+                          onTap: _pickStartTime,
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: TextFormField(
                           controller: _endController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            _TimeInputFormatter(),
-                          ],
+                          readOnly: true,
                           decoration: InputDecoration(
                             hintText: '--:--',
                             contentPadding: const EdgeInsets.symmetric(
@@ -935,8 +1093,7 @@ class _ShiftEditorDialogState extends State<_ShiftEditorDialog> {
                               color: Colors.grey.shade600,
                             ),
                           ),
-                          onChanged: (value) =>
-                              setState(() => _endTime = _parseTimeInput(value)),
+                          onTap: _pickEndTime,
                         ),
                       ),
                     ],
@@ -1128,27 +1285,6 @@ class _BulkOptionRow extends StatelessWidget {
   }
 }
 
-class _TimeInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final trimmed = digits.length > 4 ? digits.substring(0, 4) : digits;
-    String result;
-    if (trimmed.length <= 2) {
-      result = trimmed;
-    } else {
-      result = '${trimmed.substring(0, 2)}:${trimmed.substring(2)}';
-    }
-    return TextEditingValue(
-      text: result,
-      selection: TextSelection.collapsed(offset: result.length),
-    );
-  }
-}
-
 class _CalendarGrid extends StatelessWidget {
   final List<_ScheduleDay> days;
   final bool Function(DateTime date) isToday;
@@ -1195,7 +1331,7 @@ class _CalendarGrid extends StatelessWidget {
             crossAxisCount: 7,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            mainAxisExtent: 140,
+            childAspectRatio: 1,
           ),
           itemCount: days.length,
           itemBuilder: (context, index) {
@@ -1238,44 +1374,44 @@ class _CalendarGrid extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    ...dayShifts.map(
-                      (shift) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: GestureDetector(
-                          onTap: isPast ? null : () => onShiftTap(shift),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: staffColor(shift.staffId),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  staffName(shift),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: staffTextColor(shift.staffId),
+                    Expanded(
+                      child: dayShifts.isEmpty
+                          ? const SizedBox.shrink()
+                          : ListView.builder(
+                              padding: EdgeInsets.zero,
+                              physics: dayShifts.length <= 2
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const BouncingScrollPhysics(),
+                              itemCount: dayShifts.length,
+                              itemBuilder: (context, index) {
+                                final shift = dayShifts[index];
+                                return Padding(
+                                  padding:
+                                      EdgeInsets.only(bottom: index == dayShifts.length - 1 ? 0 : 4),
+                                  child: GestureDetector(
+                                    onTap: isPast ? null : () => onShiftTap(shift),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: staffColor(shift.staffId),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        staffName(shift),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: staffTextColor(shift.staffId),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${shift.startTime.substring(0, 5)} - ${shift.endTime.substring(0, 5)}',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: staffTextColor(shift.staffId),
-                                  ),
-                                ),
-                              ],
+                                );
+                              },
                             ),
-                          ),
-                        ),
-                      ),
                     ),
                   ],
                 ),

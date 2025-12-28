@@ -22,6 +22,15 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primaryColor: const Color(0xFFE66ACF),
         scaffoldBackgroundColor: Colors.white,
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
         fontFamily:
             'Roboto', // özel font kullanıyorsan burayı değiştirebilirsin
       ),
