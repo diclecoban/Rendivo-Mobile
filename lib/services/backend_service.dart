@@ -639,10 +639,12 @@ class BackendService {
     required String businessId,
     DateTime? startDate,
     DateTime? endDate,
+    String? staffId,
   }) async {
     final params = <String, String>{};
     if (startDate != null) params['startDate'] = _formatDate(startDate);
     if (endDate != null) params['endDate'] = _formatDate(endDate);
+    if (staffId != null && staffId.isNotEmpty) params['staffId'] = staffId;
 
     final uri = Uri.parse('$_baseUrl/businesses/$businessId/availability')
         .replace(queryParameters: params.isEmpty ? null : params);

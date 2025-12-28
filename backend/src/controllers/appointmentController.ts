@@ -78,7 +78,14 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
         {
           model: Business,
           as: 'business',
-          attributes: ['id', 'businessName', 'address', 'city', 'state', 'phone'],
+          attributes: ['id', 'businessName', 'address', 'city', 'state', 'phone', 'email'],
+          include: [
+            {
+              model: User,
+              as: 'owner',
+              attributes: ['id', 'fullName', 'firstName', 'email'],
+            },
+          ],
         },
         {
           model: StaffMember,
@@ -86,7 +93,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['fullName', 'firstName', 'lastName', 'email'],
           }],
         },
         {
@@ -97,22 +104,80 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
       ],
     });
 
-    const customerEmail = (req.user as User)?.email || completeAppointment?.customer?.email;
-    if (customerEmail && completeAppointment) {
-      const dateLabel = new Date(completeAppointment.appointmentDate).toDateString();
-      const startLabel = completeAppointment.startTime.substring(0, 5);
-      const endLabel = completeAppointment.endTime.substring(0, 5);
+    if (!completeAppointment) {
+      return res.status(500).json({ message: 'Unable to load appointment details' });
+    }
+
+    const customerEmail = (req.user as User)?.email || completeAppointment.customer?.email;
+    const dateLabel = new Date(completeAppointment.appointmentDate).toDateString();
+    const startLabel = completeAppointment.startTime.substring(0, 5);
+    const endLabel = completeAppointment.endTime.substring(0, 5);
+    const serviceNames =
+      completeAppointment.services?.map((service) => service.name).filter(Boolean) ?? [];
+    const businessName = completeAppointment.business?.businessName || 'Rendivo Partner';
+    const owner = completeAppointment.business?.owner;
+    const ownerEmail = owner?.email || completeAppointment.business?.email;
+    const ownerName = owner?.fullName || owner?.firstName;
+    const staffUser = completeAppointment.staff?.user;
+    const staffName =
+      staffUser?.fullName ||
+      [staffUser?.firstName, staffUser?.lastName].filter(Boolean).join(' ') ||
+      undefined;
+    const customerName =
+      completeAppointment.customer?.fullName ||
+      (req.user as User)?.fullName ||
+      customerEmail ||
+      'Customer';
+
+    if (customerEmail) {
       try {
         await EmailService.sendAppointmentConfirmation({
           email: customerEmail,
           name: completeAppointment.customer?.fullName || (req.user as User)?.fullName,
-          businessName: completeAppointment.business?.businessName || 'Rendivo Partner',
+          businessName,
           appointmentDate: dateLabel,
           startTime: startLabel,
           endTime: endLabel,
         });
       } catch (emailError) {
         console.error('Failed to send appointment confirmation email:', emailError);
+      }
+    }
+
+    if (ownerEmail) {
+      const ownerTargetEmail = ownerEmail as string;
+      try {
+        await EmailService.sendBusinessAppointmentCreated({
+          email: ownerTargetEmail,
+          ownerName,
+          businessName,
+          customerName,
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+          endTime: endLabel,
+          services: serviceNames,
+          staffName,
+        });
+      } catch (ownerEmailError) {
+        console.error('Failed to send business appointment email:', ownerEmailError);
+      }
+    }
+
+    if (staffUser?.email) {
+      const staffTargetEmail = staffUser.email as string;
+      try {
+        await EmailService.sendStaffAppointmentAssigned({
+          email: staffTargetEmail,
+          staffName,
+          businessName,
+          customerName,
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+          endTime: endLabel,
+          services: serviceNames,
+        });
+      } catch (staffEmailError) {
+        console.error('Failed to send staff appointment email:', staffEmailError);
       }
     }
 
@@ -336,9 +401,31 @@ export const updateAppointmentStatus = async (req: AuthRequest, res: Response): 
     const appointment = await Appointment.findByPk(id, {
       include: [
         {
+          model: Service,
+          as: 'services',
+          attributes: ['name'],
+          through: { attributes: [] },
+        },
+        {
           model: Business,
           as: 'business',
-          attributes: ['businessName'],
+          attributes: ['businessName', 'email'],
+          include: [
+            {
+              model: User,
+              as: 'owner',
+              attributes: ['fullName', 'firstName', 'email'],
+            },
+          ],
+        },
+        {
+          model: StaffMember,
+          as: 'staff',
+          include: [{
+            model: User,
+            as: 'user',
+            attributes: ['fullName', 'firstName', 'lastName', 'email'],
+          }],
         },
         {
           model: User,
@@ -382,9 +469,31 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
     const appointment = await Appointment.findByPk(id, {
       include: [
         {
+          model: Service,
+          as: 'services',
+          attributes: ['name'],
+          through: { attributes: [] },
+        },
+        {
           model: Business,
           as: 'business',
-          attributes: ['businessName'],
+          attributes: ['businessName', 'email'],
+          include: [
+            {
+              model: User,
+              as: 'owner',
+              attributes: ['fullName', 'firstName', 'email'],
+            },
+          ],
+        },
+        {
+          model: StaffMember,
+          as: 'staff',
+          include: [{
+            model: User,
+            as: 'user',
+            attributes: ['fullName', 'firstName', 'lastName', 'email'],
+          }],
         },
         {
           model: User,
@@ -410,14 +519,25 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
     const startTime = appointment.startTime;
     const businessName = appointment.business?.businessName || 'Rendivo Partner';
     const customerEmail = appointment.customer?.email;
-    const customerName = appointment.customer?.fullName;
+    const customerName = appointment.customer?.fullName || 'Customer';
+    const owner = appointment.business?.owner;
+    const ownerEmail = owner?.email || appointment.business?.email;
+    const ownerName = owner?.fullName || owner?.firstName;
+    const staffUser = appointment.staff?.user;
+    const staffEmail = staffUser?.email;
+    const staffName =
+      staffUser?.fullName ||
+      [staffUser?.firstName, staffUser?.lastName].filter(Boolean).join(' ') ||
+      undefined;
+    const serviceNames =
+      appointment.services?.map((service) => service.name).filter(Boolean) ?? [];
+    const dateLabel = new Date(appointmentDate).toDateString();
+    const startLabel = startTime.substring(0, 5);
 
     await appointment.destroy();
 
     if (customerEmail) {
       try {
-        const dateLabel = new Date(appointmentDate).toDateString();
-        const startLabel = startTime.substring(0, 5);
         await EmailService.sendAppointmentCancellation({
           email: customerEmail,
           name: customerName,
@@ -427,6 +547,41 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
         });
       } catch (emailError) {
         console.error('Failed to send cancellation email:', emailError);
+      }
+    }
+
+    if (ownerEmail) {
+      const ownerTargetEmail = ownerEmail as string;
+      try {
+        await EmailService.sendBusinessAppointmentCancelled({
+          email: ownerTargetEmail,
+          ownerName,
+          businessName,
+          customerName,
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+          services: serviceNames,
+          staffName,
+        });
+      } catch (businessEmailError) {
+        console.error('Failed to send business cancellation email:', businessEmailError);
+      }
+    }
+
+    if (staffEmail) {
+      const staffTargetEmail = staffEmail as string;
+      try {
+        await EmailService.sendStaffAppointmentCancelled({
+          email: staffTargetEmail,
+          staffName,
+          businessName,
+          customerName,
+          appointmentDate: dateLabel,
+          startTime: startLabel,
+          services: serviceNames,
+        });
+      } catch (staffEmailError) {
+        console.error('Failed to send staff cancellation email:', staffEmailError);
       }
     }
 

@@ -200,6 +200,197 @@ class EmailService {
       html,
     });
   }
+
+  static async sendBusinessAppointmentCreated(options: {
+    email: string;
+    ownerName?: string;
+    businessName: string;
+    customerName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+    services?: string[];
+    staffName?: string;
+  }): Promise<void> {
+    const servicesBlock =
+      options.services && options.services.length > 0
+        ? `<p style="margin:0 0 12px;"><strong>Services:</strong> ${options.services.join(', ')}</p>`
+        : '';
+    const staffBlock = options.staffName
+      ? `<p style="margin:0 0 12px;"><strong>Assigned to:</strong> ${options.staffName}</p>`
+      : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.ownerName ?? 'there'},</p>
+        <p style="margin:0 0 12px;"><strong>${options.customerName}</strong> booked a new appointment at <strong>${options.businessName}</strong>.</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${options.appointmentDate}<br/>
+           <strong>Time:</strong> ${options.startTime} - ${options.endTime}</p>
+        ${servicesBlock}
+        ${staffBlock}
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">New appointment booked</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - New booking on ${options.appointmentDate}`,
+      html,
+    });
+  }
+
+  static async sendBusinessAppointmentCancelled(options: {
+    email: string;
+    ownerName?: string;
+    businessName: string;
+    customerName: string;
+    appointmentDate: string;
+    startTime: string;
+    services?: string[];
+    staffName?: string;
+  }): Promise<void> {
+    const servicesBlock =
+      options.services && options.services.length > 0
+        ? `<p style="margin:0 0 12px;"><strong>Services:</strong> ${options.services.join(', ')}</p>`
+        : '';
+    const staffBlock = options.staffName
+      ? `<p style="margin:0 0 12px;"><strong>Assigned to:</strong> ${options.staffName}</p>`
+      : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.ownerName ?? 'there'},</p>
+        <p style="margin:0 0 12px;">We wanted to let you know that <strong>${options.customerName}</strong> cancelled their appointment at <strong>${options.businessName}</strong>.</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${options.appointmentDate}<br/>
+           <strong>Time:</strong> ${options.startTime}</p>
+        ${servicesBlock}
+        ${staffBlock}
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Appointment cancelled</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - Booking cancelled (${options.appointmentDate})`,
+      html,
+    });
+  }
+
+  static async sendStaffAppointmentAssigned(options: {
+    email: string;
+    staffName?: string;
+    businessName: string;
+    customerName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+    services?: string[];
+  }): Promise<void> {
+    const servicesBlock =
+      options.services && options.services.length > 0
+        ? `<p style="margin:0 0 12px;"><strong>Services:</strong> ${options.services.join(', ')}</p>`
+        : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hi ${options.staffName ?? 'there'},</p>
+        <p style="margin:0 0 12px;">You have a new appointment at <strong>${options.businessName}</strong>.</p>
+        <p style="margin:0 0 12px;"><strong>Client:</strong> ${options.customerName}</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${options.appointmentDate}<br/>
+           <strong>Time:</strong> ${options.startTime} - ${options.endTime}</p>
+        ${servicesBlock}
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">New appointment assigned</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - ${options.businessName} appointment (${options.appointmentDate})`,
+      html,
+    });
+  }
+
+  static async sendStaffAppointmentCancelled(options: {
+    email: string;
+    staffName?: string;
+    businessName: string;
+    customerName: string;
+    appointmentDate: string;
+    startTime: string;
+    services?: string[];
+  }): Promise<void> {
+    const servicesBlock =
+      options.services && options.services.length > 0
+        ? `<p style="margin:0 0 12px;"><strong>Services:</strong> ${options.services.join(', ')}</p>`
+        : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hi ${options.staffName ?? 'there'},</p>
+        <p style="margin:0 0 12px;">The appointment with <strong>${options.customerName}</strong> at <strong>${options.businessName}</strong> was cancelled.</p>
+        <p style="margin:0 0 12px;"><strong>Date:</strong> ${options.appointmentDate}<br/>
+           <strong>Time:</strong> ${options.startTime}</p>
+        ${servicesBlock}
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Appointment cancelled</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - Appointment cancelled (${options.appointmentDate})`,
+      html,
+    });
+  }
+
+  static async sendBusinessStaffAdded(options: {
+    email: string;
+    ownerName?: string;
+    businessName: string;
+    staffName: string;
+    staffEmail?: string;
+  }): Promise<void> {
+    const contactBlock = options.staffEmail
+      ? `<p style="margin:0 0 12px;"><strong>Staff email:</strong> ${options.staffEmail}</p>`
+      : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.ownerName ?? 'there'},</p>
+        <p style="margin:0 0 12px;"><strong>${options.staffName}</strong> just joined <strong>${options.businessName}</strong>.</p>
+        ${contactBlock}
+        <p style="margin:0;">Share shifts or appointments with them so they can start working immediately.</p>
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">New staff member added</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - ${options.staffName} joined your team`,
+      html,
+    });
+  }
+
+  static async sendBusinessStaffRemoved(options: {
+    email: string;
+    ownerName?: string;
+    businessName: string;
+    staffName: string;
+    staffEmail?: string;
+  }): Promise<void> {
+    const contactBlock = options.staffEmail
+      ? `<p style="margin:0 0 12px;"><strong>Staff email:</strong> ${options.staffEmail}</p>`
+      : '';
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.ownerName ?? 'there'},</p>
+        <p style="margin:0 0 12px;"><strong>${options.staffName}</strong> has been removed from <strong>${options.businessName}</strong>.</p>
+        ${contactBlock}
+        <p style="margin:0;">Their access to Rendivo has been revoked.</p>
+      </div>
+    `;
+    const html = renderEmailLayout('<span style="display:block;text-align:center;">Staff member removed</span>', body);
+
+    await this.sendEmail({
+      to: options.email,
+      subject: `Rendivo - ${options.staffName} removed from your team`,
+      html,
+    });
+  }
 }
 
 export default EmailService;

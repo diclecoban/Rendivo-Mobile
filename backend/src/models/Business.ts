@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
+import User from './User';
 
 // Business approval status
 export enum ApprovalStatus {
@@ -59,6 +60,7 @@ class Business extends Model<BusinessAttributes, BusinessCreationAttributes> imp
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+  public readonly owner?: User;
 }
 
 Business.init(

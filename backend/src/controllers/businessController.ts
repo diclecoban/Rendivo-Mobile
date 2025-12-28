@@ -361,12 +361,35 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
 export const getBusinessAvailability = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const { id } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, staffId: staffIdParam } = req.query;
+
+    let staffIdFilter: number | null = null;
+    if (staffIdParam) {
+      const parsedStaffId = Number(staffIdParam);
+      if (Number.isNaN(parsedStaffId)) {
+        return res.status(400).json({ message: 'Invalid staffId parameter' });
+      }
+      const staffMember = await StaffMember.findOne({
+        where: {
+          id: parsedStaffId,
+          businessId: id,
+          isActive: true,
+        },
+      });
+      if (!staffMember) {
+        return res.status(404).json({ message: 'Staff member not found for this business' });
+      }
+      staffIdFilter = staffMember.id;
+    }
 
     const whereClause: any = {
       businessId: id,
       status: { [Op.in]: ['confirmed', 'completed'] },
     };
+
+    if (staffIdFilter) {
+      whereClause.staffId = staffIdFilter;
+    }
 
     if (startDate && endDate) {
       whereClause.appointmentDate = {
@@ -382,6 +405,9 @@ export const getBusinessAvailability = async (req: AuthRequest, res: Response): 
     const shiftWhere: any = {
       businessId: id,
     };
+    if (staffIdFilter) {
+      shiftWhere.staffId = staffIdFilter;
+    }
     if (startDate && endDate) {
       shiftWhere.shiftDate = {
         [Op.between]: [startDate as string, endDate as string],
@@ -411,6 +437,7 @@ export const getBusinessAvailability = async (req: AuthRequest, res: Response): 
       businessId: id,
       startDate: startDate ?? null,
       endDate: endDate ?? null,
+      staffId: staffIdFilter,
       bookedDays,
       bookedSlots,
       shiftSlots,

@@ -27,7 +27,12 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   List<ServiceItem> _services = [];
   final Set<String> _selectedServiceIds = {};
 
-  DateTime _selectedDate = DateTime.now();
+  List<StaffMember> _staffMembers = [];
+  bool _staffLoading = true;
+  String? _staffError;
+  StaffMember? _selectedStaff;
+
+  DateTime? _selectedDate;
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   Set<String> _bookedDays = {};
   Map<String, List<AvailabilitySlot>> _bookedSlotsByDate = {};
@@ -42,7 +47,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   void initState() {
     super.initState();
     _loadServices();
-    _loadAvailabilityForMonth(_focusedMonth);
+    _loadStaff();
   }
 
   @override
@@ -71,10 +76,45 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     }
   }
 
+  Future<void> _loadStaff() async {
+    try {
+      setState(() {
+        _staffLoading = true;
+        _staffError = null;
+      });
+      final staff = await _backend.fetchBusinessStaff(widget.business.id);
+      setState(() {
+        _staffMembers = staff.isNotEmpty ? staff : widget.business.staff;
+        _staffLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _staffMembers = widget.business.staff;
+        _staffError = 'Could not load staff right now.';
+        _staffLoading = false;
+      });
+    }
+  }
+
   Future<void> _loadAvailabilityForMonth(DateTime month) async {
+    final staffId = _selectedStaff?.id;
+    if (staffId == null) {
+      setState(() {
+        _focusedMonth = month;
+        _availabilityLoading = false;
+        _availabilityError = null;
+        _bookedDays = {};
+        _bookedSlotsByDate = {};
+        _shiftSlotsByDate = {};
+        _selectedSlotStart = null;
+      });
+      return;
+    }
+
     setState(() {
       _availabilityLoading = true;
       _availabilityError = null;
+      _focusedMonth = month;
       _selectedSlotStart = null;
     });
 
@@ -86,7 +126,11 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         businessId: widget.business.id,
         startDate: start,
         endDate: end,
+        staffId: staffId,
       );
+
+      if (!mounted || _selectedStaff?.id != staffId) return;
+
       final map = <String, List<AvailabilitySlot>>{};
       for (final slot in availability.bookedSlots) {
         final key = _formatDateKey(slot.startAt);
@@ -97,16 +141,26 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         final key = _formatDateKey(slot.startAt);
         shiftMap.putIfAbsent(key, () => []).add(slot);
       }
+
       setState(() {
         _bookedDays = availability.bookedDays.toSet();
         _bookedSlotsByDate = map;
         _shiftSlotsByDate = shiftMap;
-        _focusedMonth = month;
-        final availSlots = _availableSlotsForDay(_selectedDate);
-        _selectedSlotStart = availSlots.isNotEmpty ? availSlots.first : null;
         _availabilityLoading = false;
+
+        if (_selectedDate != null) {
+          final availSlots = _availableSlotsForDay(_selectedDate!);
+          final hasSelectedSlot = _selectedSlotStart != null &&
+              availSlots.any(
+                (slot) => _selectedSlotStart!.isAtSameMomentAs(slot),
+              );
+          if (!hasSelectedSlot) {
+            _selectedSlotStart = null;
+          }
+        }
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _availabilityError = 'Could not load availability.';
         _availabilityLoading = false;
@@ -192,6 +246,20 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         .toList();
   }
 
+  void _handleStaffSelection(StaffMember member) {
+    if (_selectedStaff?.id == member.id) return;
+    setState(() {
+      _selectedStaff = member;
+      _selectedDate = null;
+      _selectedSlotStart = null;
+      _bookedDays = {};
+      _bookedSlotsByDate = {};
+      _shiftSlotsByDate = {};
+      _availabilityError = null;
+    });
+    _loadAvailabilityForMonth(_focusedMonth);
+  }
+
   Future<void> _book() async {
     final user = _session.currentUser;
     if (user == null || _session.authToken == null) {
@@ -204,6 +272,17 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
     if (_selectedServices.isEmpty) {
       AppSnackbar.show(context, 'Select at least one service.');
+      return;
+    }
+
+    final staff = _selectedStaff;
+    if (staff == null) {
+      AppSnackbar.show(context, 'Select a staff member to continue.');
+      return;
+    }
+
+    if (_selectedDate == null) {
+      AppSnackbar.show(context, 'Select a date to continue.');
       return;
     }
 
@@ -223,7 +302,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         services: _selectedServices,
         startAt: start,
         endAt: end,
-        staff: null,
+        staff: staff,
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
@@ -268,7 +347,10 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
         child: RefreshIndicator(
           onRefresh: () async {
             await _loadServices();
-            await _loadAvailabilityForMonth(_focusedMonth);
+            await _loadStaff();
+            if (_selectedStaff != null) {
+              await _loadAvailabilityForMonth(_focusedMonth);
+            }
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -276,6 +358,8 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               _buildBusinessCard(addressParts),
               const SizedBox(height: 20),
               _buildServicesSection(),
+              const SizedBox(height: 16),
+              _buildStaffSection(),
               const SizedBox(height: 16),
               _buildScheduleSection(),
               const SizedBox(height: 16),
@@ -420,7 +504,19 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                           _selectedServiceIds.add(service.id);
                         }
                         _selectedSlotStart = null;
+                        if (_selectedServiceIds.isEmpty) {
+                          _selectedStaff = null;
+                          _selectedDate = null;
+                          _bookedDays = {};
+                          _bookedSlotsByDate = {};
+                          _shiftSlotsByDate = {};
+                          _availabilityError = null;
+                          _availabilityLoading = false;
+                        }
                       });
+                      if (_selectedServiceIds.isNotEmpty && _selectedStaff != null) {
+                        _loadAvailabilityForMonth(_focusedMonth);
+                      }
                     },
                     activeColor: primaryPink,
                   ),
@@ -465,7 +561,121 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     );
   }
 
+  Widget _buildStaffSection() {
+    final canSelectStaff = _selectedServiceIds.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Professional',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        if (!canSelectStaff)
+          _SequenceNotice(
+            message: 'Choose at least one service to see available staff.',
+          )
+        else if (_staffLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_staffError != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _staffError!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+              TextButton(
+                onPressed: _loadStaff,
+                child: const Text('Retry'),
+              ),
+            ],
+          )
+        else if (_staffMembers.isEmpty)
+          _SequenceNotice(
+            message:
+                'This business has no active staff profiles yet. Please check again later.',
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _staffMembers.map((member) {
+              final isSelected = _selectedStaff?.id == member.id;
+              final roleText = member.role.trim();
+              return ChoiceChip(
+                label: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      member.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (roleText.isNotEmpty)
+                      Text(
+                        roleText,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                  ],
+                ),
+                selected: isSelected,
+                selectedColor: primaryPink.withOpacity(0.14),
+                backgroundColor: Colors.white,
+                labelPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(
+                    color: isSelected ? primaryPink : Colors.grey.shade200,
+                  ),
+                ),
+                onSelected: (value) {
+                  if (!value) {
+                    setState(() {
+                      _selectedStaff = null;
+                      _selectedDate = null;
+                      _selectedSlotStart = null;
+                      _bookedDays = {};
+                      _bookedSlotsByDate = {};
+                      _shiftSlotsByDate = {};
+                      _availabilityError = null;
+                      _availabilityLoading = false;
+                    });
+                    return;
+                  }
+                  _handleStaffSelection(member);
+                },
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
   Widget _buildScheduleSection() {
+    if (_selectedStaff == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'When?',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          _SequenceNotice(
+            message: 'Pick a staff member to view available dates and times.',
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -575,11 +785,11 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
               final hasShift = _shiftSlotsForDate(day).isNotEmpty;
               final hasAvailability = _availableSlotsForDay(day).isNotEmpty;
               final isFullyBooked = isBooked && !hasAvailability;
-              final isSelected =
+              final isSelected = _selectedDate != null &&
                   inMonth &&
-                  day.year == _selectedDate.year &&
-                  day.month == _selectedDate.month &&
-                  day.day == _selectedDate.day;
+                  day.year == _selectedDate!.year &&
+                  day.month == _selectedDate!.month &&
+                  day.day == _selectedDate!.day;
               final today = DateTime.now();
               final todayDate = DateTime(today.year, today.month, today.day);
               final dayDate = DateTime(day.year, day.month, day.day);
@@ -613,9 +823,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                   final monthChanged = day.month != _focusedMonth.month;
                   setState(() {
                     _selectedDate = day;
-                    final avail = _availableSlotsForDay(day);
-                    _selectedSlotStart =
-                        avail.isNotEmpty ? avail.first : null;
+                    _selectedSlotStart = null;
                   });
                   if (monthChanged) {
                     await _loadAvailabilityForMonth(
@@ -671,7 +879,13 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
   }
 
   Widget _buildTimeSlotsGrid() {
-    final standardSlots = _standardSlotsForDay(_selectedDate);
+    if (_selectedDate == null) {
+      return _SequenceNotice(
+        message: 'Select a date to see available time slots.',
+      );
+    }
+
+    final standardSlots = _standardSlotsForDay(_selectedDate!);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -686,63 +900,63 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
             style: TextStyle(fontSize: 12, color: Colors.grey),
           )
         else
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: standardSlots.map((start) {
-            final isBooked = _isBookedSlot(start);
-            final selected = _selectedSlotStart != null &&
-                _selectedSlotStart!.isAtSameMomentAs(start);
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: standardSlots.map((start) {
+              final isBooked = _isBookedSlot(start);
+              final selected = _selectedSlotStart != null &&
+                  _selectedSlotStart!.isAtSameMomentAs(start);
 
-            return GestureDetector(
-              onTap: isBooked
-                  ? null
-                  : () {
-                      setState(() {
-                        _selectedSlotStart = start;
-                      });
-                    },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isBooked
-                      ? const Color(0xFFFFEFEF)
-                      : selected
-                          ? primaryPink.withOpacity(0.15)
-                          : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
+              return GestureDetector(
+                onTap: isBooked
+                    ? null
+                    : () {
+                        setState(() {
+                          _selectedSlotStart = start;
+                        });
+                      },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
                     color: isBooked
-                        ? Colors.redAccent
+                        ? const Color(0xFFFFEFEF)
                         : selected
-                            ? primaryPink
-                            : Colors.grey.shade300,
-                    width: selected ? 1.4 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                            ? primaryPink.withOpacity(0.15)
+                            : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isBooked
+                          ? Colors.redAccent
+                          : selected
+                              ? primaryPink
+                              : Colors.grey.shade300,
+                      width: selected ? 1.4 : 1,
                     ),
-                  ],
-                ),
-                child: Text(
-                  _formatTime(start),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: isBooked
-                        ? Colors.redAccent
-                        : selected
-                            ? primaryPink
-                            : Colors.black87,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    _formatTime(start),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: isBooked
+                          ? Colors.redAccent
+                          : selected
+                              ? primaryPink
+                              : Colors.black87,
+                    ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
@@ -866,6 +1080,41 @@ class _CalendarDow extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SequenceNotice extends StatelessWidget {
+  final String message;
+
+  const _SequenceNotice({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline, color: primaryPink, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
