@@ -619,6 +619,9 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
       }
     }
 
+    const previousDate = appointment.appointmentDate;
+    const previousStartTime = appointment.startTime;
+
     // Update appointment
     const updateData: any = {
       appointmentDate,
@@ -668,8 +671,35 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
           }],
           attributes: ['id', 'position'],
         },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['id', 'fullName', 'email'],
+        },
       ],
     });
+
+    if (updatedAppointment?.customer?.email && updatedAppointment.business) {
+      try {
+        const previousDateLabel = new Date(previousDate).toDateString();
+        const previousStartLabel = previousStartTime.substring(0, 5);
+        const newDateLabel = new Date(updatedAppointment.appointmentDate).toDateString();
+        const newStartLabel = updatedAppointment.startTime.substring(0, 5);
+        const newEndLabel = updatedAppointment.endTime.substring(0, 5);
+        await EmailService.sendAppointmentRescheduled({
+          email: updatedAppointment.customer.email,
+          name: updatedAppointment.customer.fullName,
+          businessName: updatedAppointment.business.businessName,
+          previousDate: previousDateLabel,
+          previousStartTime: previousStartLabel,
+          newDate: newDateLabel,
+          newStartTime: newStartLabel,
+          newEndTime: newEndLabel,
+        });
+      } catch (emailError) {
+        console.error('Failed to send reschedule email:', emailError);
+      }
+    }
 
     res.json({
       message: 'Appointment rescheduled successfully',
