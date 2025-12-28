@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "793369279126",
+    "firebase_url": "https://rendivo-9d606-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "rendivo-9d606",
+    "storage_bucket": "rendivo-9d606.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:793369279126:android:f633a936412ad374da20b7",
+        "android_client_info": {
+          "package_name": "com.example.rendivo_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0fJTZP4FaptX4q9mdiLnmGL5I5ndvDN4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { Business, User, StaffMember, Service, Appointment, Shift } from '../models';
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
+import notificationService from '../services/notificationService';
 
 // Get all active businesses (for discover page)
 export const getAllBusinesses = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -418,5 +419,122 @@ export const getBusinessAvailability = async (req: AuthRequest, res: Response): 
   } catch (error: any) {
     console.error('Get business availability error:', error);
     res.status(500).json({ message: 'Error fetching availability', error: error.message });
+  }
+};
+
+// Remove staff member (Business owner only)
+export const removeStaffMember = async (
+  req: AuthRequest,
+  res: Response
+): Promise<Response | void> => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const business = await Business.findOne({ where: { ownerId: userId } });
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    const staffMember = await StaffMember.findOne({
+      where: { id, businessId: business.id },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'fullName', 'email'],
+        },
+      ],
+    });
+
+    if (!staffMember) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    staffMember.isActive = false;
+    await staffMember.save();
+
+    const staffUserId = (staffMember as any).user?.id;
+    const staffLabel =
+      (staffMember as any).user?.fullName || (staffMember as any).user?.email || 'Staff';
+
+    if (staffUserId) {
+      await notificationService.sendToUsers(
+        [staffUserId],
+        {
+          title: 'İşletmeden çıkarıldınız',
+          body: `${business.businessName} işletmesinden çıkarıldınız.`,
+          data: {
+            type: 'staff_removed',
+            businessId: String(business.id),
+          },
+        }
+      );
+    }
+
+    await notificationService.sendToUsers(
+      [business.ownerId],
+      {
+        title: 'Personel çıkarıldı',
+        body: `${staffLabel} işletmeden çıkarıldı.`,
+        data: {
+          type: 'staff_removed',
+          staffId: String(staffMember.id),
+        },
+      }
+    );
+
+    res.json({ message: 'Staff member removed' });
+  } catch (error: any) {
+    console.error('Remove staff member error:', error);
+    res.status(500).json({ message: 'Error removing staff member', error: error.message });
+  }
+};
+
+export const sendBusinessTestNotification = async (
+  req: AuthRequest,
+  res: Response
+): Promise<Response | void> => {
+  try {
+    const { businessId } = req.params;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const business = await Business.findOne({ where: { businessId } });
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    if (userRole !== 'admin' && business.ownerId !== userId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    await notificationService.sendToUsers(
+      [business.ownerId],
+      {
+        title: 'Test notification',
+        body: `Test push for business ${business.businessName}.`,
+        data: {
+          type: 'test_notification',
+          businessId: String(business.id),
+        },
+      }
+    );
+
+    return res.json({ message: 'Test notification sent' });
+  } catch (error: any) {
+    console.error('Send business test notification error:', error);
+    return res.status(500).json({
+      message: 'Error sending test notification',
+      error: error.message,
+    });
   }
 };

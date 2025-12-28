@@ -635,6 +635,34 @@ class BackendService {
     throw const AppException('Updating notes is not supported.');
   }
 
+  Future<void> registerDeviceToken({
+    required String token,
+    String platform = 'android',
+  }) async {
+    final uri = Uri.parse('$_baseUrl/users/device-token');
+    final response = await _client.post(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({
+        'token': token,
+        'platform': platform,
+      }),
+    );
+
+    _handleResponse(response, (_) => null);
+  }
+
+  Future<void> deleteDeviceToken(String token) async {
+    final uri = Uri.parse('$_baseUrl/users/device-token');
+    final response = await _client.delete(
+      uri,
+      headers: _headers(withAuth: true),
+      body: jsonEncode({'token': token}),
+    );
+
+    _handleResponse(response, (_) => null);
+  }
+
   Future<BusinessAvailability> fetchBusinessAvailability({
     required String businessId,
     DateTime? startDate,

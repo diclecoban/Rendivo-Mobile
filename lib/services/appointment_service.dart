@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/app_models.dart';
 import 'backend_service.dart';
 
@@ -15,7 +17,10 @@ class AppointmentService {
     StaffMember? staff,
     String? notes,
   }) async {
-    return _backend.createAppointment(
+    debugPrint(
+      'Booking appointment: business=${business.id}, customer=${customer.id}, services=${services.length}, start=$startAt, end=$endAt',
+    );
+    final appointmentId = await _backend.createAppointment(
       businessId: business.id,
       serviceIds: services.map((s) => s.id).toList(),
       startAt: startAt,
@@ -23,5 +28,7 @@ class AppointmentService {
       staffId: staff?.id,
       notes: notes,
     );
+    debugPrint('Appointment created: id=$appointmentId');
+    return appointmentId;
   }
 }

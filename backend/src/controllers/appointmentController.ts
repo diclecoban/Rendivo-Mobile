@@ -4,6 +4,12 @@ import { AuthRequest } from '../middleware/auth';
 import { Appointment, Service, Business, StaffMember, User, AppointmentService } from '../models';
 import { AppointmentStatus } from '../models/Appointment';
 import EmailService from '../services/emailService';
+import notificationService from '../services/notificationService';
+
+const formatDateLabel = (date: Date | string) =>
+  new Date(date).toDateString();
+
+const formatTimeLabel = (time: string) => time.substring(0, 5);
 
 // Create a new appointment
 export const createAppointment = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -78,7 +84,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
         {
           model: Business,
           as: 'business',
-          attributes: ['id', 'businessName', 'address', 'city', 'state', 'phone'],
+          attributes: ['id', 'businessName', 'address', 'city', 'state', 'phone', 'ownerId'],
         },
         {
           model: StaffMember,
@@ -86,7 +92,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['id', 'fullName'],
           }],
         },
         {
@@ -113,6 +119,54 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
         });
       } catch (emailError) {
         console.error('Failed to send appointment confirmation email:', emailError);
+      }
+    }
+
+    if (completeAppointment) {
+      const appointmentDate = formatDateLabel(completeAppointment.appointmentDate);
+      const startLabel = formatTimeLabel(completeAppointment.startTime);
+      const businessName = completeAppointment.business?.businessName || 'Rendivo Partner';
+      const businessOwnerId = completeAppointment.business?.ownerId;
+      const staffUserId = (completeAppointment.staff as any)?.user?.id;
+
+      await notificationService.sendToUsers(
+        [completeAppointment.customerId],
+        {
+          title: 'Randevunuz onaylandı',
+          body: `${businessName} randevunuz ${appointmentDate} ${startLabel} için onaylandı.`,
+          data: {
+            type: 'customer_booking',
+            appointmentId: String(completeAppointment.id),
+          },
+        }
+      );
+
+      if (businessOwnerId) {
+        await notificationService.sendToUsers(
+          [businessOwnerId],
+          {
+            title: 'Yeni randevu',
+            body: `${appointmentDate} ${startLabel} için yeni randevu alındı.`,
+            data: {
+              type: 'business_new_appointment',
+              appointmentId: String(completeAppointment.id),
+            },
+          }
+        );
+      }
+
+      if (staffUserId) {
+        await notificationService.sendToUsers(
+          [staffUserId],
+          {
+            title: 'Yeni randevu',
+            body: `${appointmentDate} ${startLabel} için randevu atandı.`,
+            data: {
+              type: 'staff_new_appointment',
+              appointmentId: String(completeAppointment.id),
+            },
+          }
+        );
       }
     }
 
@@ -379,7 +433,29 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const appointment = await Appointment.findByPk(id);
+    const appointment = await Appointment.findByPk(id, {
+      include: [
+        {
+          model: Business,
+          as: 'business',
+          attributes: ['id', 'businessName', 'ownerId'],
+        },
+        {
+          model: StaffMember,
+          as: 'staff',
+          include: [{
+            model: User,
+            as: 'user',
+            attributes: ['id', 'fullName'],
+          }],
+        },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['id', 'fullName', 'email'],
+        },
+      ],
+    });
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
@@ -398,13 +474,16 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
     const businessName = appointment.business?.businessName || 'Rendivo Partner';
     const customerEmail = appointment.customer?.email;
     const customerName = appointment.customer?.fullName;
+    const businessOwnerId = appointment.business?.ownerId;
+    const staffUserId = (appointment.staff as any)?.user?.id;
+    const isBusinessCancel = req.user?.role === 'business_owner';
 
     await appointment.destroy();
 
     if (customerEmail) {
       try {
-        const dateLabel = new Date(appointmentDate).toDateString();
-        const startLabel = startTime.substring(0, 5);
+        const dateLabel = formatDateLabel(appointmentDate);
+        const startLabel = formatTimeLabel(startTime);
         await EmailService.sendAppointmentCancellation({
           email: customerEmail,
           name: customerName,
@@ -420,6 +499,59 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
     res.json({
       message: 'Appointment cancelled successfully',
     });
+
+    const dateLabel = formatDateLabel(appointmentDate);
+    const startLabel = formatTimeLabel(startTime);
+
+    if (appointment.customerId) {
+      await notificationService.sendToUsers(
+        [appointment.customerId],
+        {
+          title: 'Randevunuz iptal edildi',
+          body: isBusinessCancel
+            ? `${businessName} randevunuzu iptal etti. (${dateLabel} ${startLabel})`
+            : `Randevunuz iptal edildi. (${dateLabel} ${startLabel})`,
+          data: {
+            type: isBusinessCancel
+                ? 'customer_cancellation_by_business'
+                : 'customer_cancellation_by_customer',
+            appointmentId: String(appointment.id),
+          },
+        }
+      );
+    }
+
+    if (businessOwnerId) {
+      await notificationService.sendToUsers(
+        [businessOwnerId],
+        {
+          title: 'Randevu iptal edildi',
+          body: isBusinessCancel
+            ? `${dateLabel} ${startLabel} randevusunu iptal ettiniz.`
+            : `Müşteri ${dateLabel} ${startLabel} randevusunu iptal etti.`,
+          data: {
+            type: isBusinessCancel
+                ? 'business_cancellation_by_business'
+                : 'business_cancellation_by_customer',
+            appointmentId: String(appointment.id),
+          },
+        }
+      );
+    }
+
+    if (staffUserId) {
+      await notificationService.sendToUsers(
+        [staffUserId],
+        {
+          title: 'Randevu iptal edildi',
+          body: `${dateLabel} ${startLabel} randevusu iptal edildi.`,
+          data: {
+            type: 'staff_appointment_cancelled',
+            appointmentId: String(appointment.id),
+          },
+        }
+      );
+    }
   } catch (error: any) {
     console.error('Cancel appointment error:', error);
     res.status(500).json({ message: 'Error cancelling appointment', error: error.message });
