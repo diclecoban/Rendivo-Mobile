@@ -94,7 +94,7 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName', 'firstName', 'lastName', 'email'],
+            attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
           }],
         },
       ],
@@ -276,7 +276,7 @@ export const getCustomerAppointments = async (req: AuthRequest, res: Response): 
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['id', 'fullName'],
           }],
           attributes: ['id', 'position'],
         },
@@ -325,7 +325,7 @@ export const getBusinessAppointments = async (req: AuthRequest, res: Response): 
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['id', 'fullName'],
           }],
           attributes: ['id', 'position'],
         },
@@ -412,7 +412,7 @@ export const getAppointmentById = async (req: AuthRequest, res: Response): Promi
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['id', 'fullName'],
           }],
           attributes: ['id', 'position'],
         },
@@ -481,7 +481,7 @@ export const updateAppointmentStatus = async (req: AuthRequest, res: Response): 
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName', 'firstName', 'lastName', 'email'],
+            attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
           }],
         },
         {
@@ -549,7 +549,7 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName', 'firstName', 'lastName', 'email'],
+            attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
           }],
         },
         {
@@ -844,7 +844,7 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
           include: [{
             model: User,
             as: 'user',
-            attributes: ['fullName'],
+            attributes: ['id', 'fullName'],
           }],
           attributes: ['id', 'position'],
         },
