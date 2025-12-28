@@ -639,12 +639,12 @@ class BackendService {
     required String token,
     String platform = 'android',
   }) async {
-    final uri = Uri.parse('$_baseUrl/users/device-token');
+    final uri = Uri.parse('$_baseUrl/notifications/register-token');
     final response = await _client.post(
       uri,
       headers: _headers(withAuth: true),
       body: jsonEncode({
-        'token': token,
+        'fcmToken': token,
         'platform': platform,
       }),
     );

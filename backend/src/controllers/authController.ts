@@ -6,7 +6,6 @@ import { UserRole, AuthProvider } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import firebaseAdmin from '../config/firebase';
 import EmailService from '../services/emailService';
-import notificationService from '../services/notificationService';
 
 // Generate JWT token
 const generateToken = (userId: number, email: string, role: string, firstName?: string, lastName?: string, fullName?: string): string => {
@@ -149,32 +148,6 @@ export const registerStaff = async (req: AuthRequest, res: Response): Promise<Re
       businessId: business.id,
       isActive: true,
     });
-
-    if (business.ownerId) {
-      await notificationService.sendToUsers(
-        [business.ownerId],
-        {
-          title: 'Yeni personel eklendi',
-          body: `${user.fullName || user.email} işletmenize eklendi.`,
-          data: {
-            type: 'staff_added',
-            staffUserId: String(user.id),
-          },
-        }
-      );
-    }
-
-    await notificationService.sendToUsers(
-      [user.id],
-      {
-        title: 'İşletmeye eklendiniz',
-        body: `${business.businessName} işletmesine eklendiniz.`,
-        data: {
-          type: 'staff_added',
-          businessId: String(business.id),
-        },
-      }
-    );
 
     // Send verification email
     try {
@@ -633,3 +606,4 @@ export const resendVerification = async (req: AuthRequest, res: Response): Promi
     res.status(500).json({ message: 'Error sending verification email', error: error.message });
   }
 };
+

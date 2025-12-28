@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { Appointment, Service, Business, StaffMember, User, AppointmentService } from '../models';
 import { AppointmentStatus } from '../models/Appointment';
 import EmailService from '../services/emailService';
+import { notificationService } from '../services/notificationService';
 
 // Create a new appointment
 export const createAppointment = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -174,6 +175,67 @@ export const createAppointment = async (req: AuthRequest, res: Response): Promis
       } catch (staffEmailError) {
         console.error('Failed to send staff appointment email:', staffEmailError);
       }
+    }
+
+    const appointmentId = completeAppointment.id?.toString();
+    const notificationTasks: Promise<void>[] = [];
+
+    if (customerId) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: customerId.toString(),
+            type: 'appointment_booked',
+            title: 'Appointment confirmed',
+            message: `${businessName} on ${dateLabel} at ${startLabel}`,
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send customer notification:', error);
+          })
+      );
+    }
+
+    if (owner?.id) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: owner.id.toString(),
+            type: 'appointment_booked',
+            title: 'New appointment booked',
+            message: `${customerName} on ${dateLabel} at ${startLabel}`,
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send owner notification:', error);
+          })
+      );
+    }
+
+    if (staffUser?.id) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: staffUser.id.toString(),
+            type: 'appointment_assigned',
+            title: 'New appointment assigned',
+            message: `${customerName} on ${dateLabel} at ${startLabel}`,
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send staff notification:', error);
+          })
+      );
+    }
+
+    if (notificationTasks.length > 0) {
+      await Promise.all(notificationTasks);
     }
 
     res.status(201).json({
@@ -528,6 +590,12 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
       appointment.services?.map((service) => service.name).filter(Boolean) ?? [];
     const dateLabel = new Date(appointmentDate).toDateString();
     const startLabel = startTime.substring(0, 5);
+    const appointmentId = appointment.id?.toString();
+    const cancelledBy = isCustomer ? 'customer' : 'business';
+    const cancelType =
+      cancelledBy === 'customer'
+        ? 'appointment_cancelled_by_customer'
+        : 'appointment_cancelled_by_business';
 
     await appointment.destroy();
 
@@ -578,6 +646,75 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
       } catch (staffEmailError) {
         console.error('Failed to send staff cancellation email:', staffEmailError);
       }
+    }
+
+    const notificationTasks: Promise<void>[] = [];
+
+    if (customerEmail && appointment.customerId) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: appointment.customerId.toString(),
+            type: cancelType,
+            title: 'Appointment cancelled',
+            message:
+              cancelledBy === 'customer'
+                ? 'Your appointment was cancelled successfully.'
+                : 'Your appointment was cancelled by the business.',
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send customer cancellation notification:', error);
+          })
+      );
+    }
+
+    if (owner?.id) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: owner.id.toString(),
+            type: cancelType,
+            title: 'Appointment cancelled',
+            message:
+              cancelledBy === 'customer'
+                ? `${customerName} cancelled the appointment.`
+                : 'The appointment was cancelled by the business.',
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send owner cancellation notification:', error);
+          })
+      );
+    }
+
+    if (staffUser?.id) {
+      notificationTasks.push(
+        notificationService
+          .sendNotification({
+            userId: staffUser.id.toString(),
+            type: cancelType,
+            title: 'Appointment cancelled',
+            message:
+              cancelledBy === 'customer'
+                ? `${customerName} cancelled the appointment.`
+                : 'The appointment was cancelled by the business.',
+            relatedId: appointmentId,
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointmentId}`,
+          })
+          .catch((error) => {
+            console.error('Failed to send staff cancellation notification:', error);
+          })
+      );
+    }
+
+    if (notificationTasks.length > 0) {
+      await Promise.all(notificationTasks);
     }
 
     res.json({
@@ -650,6 +787,11 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
       }
     }
 
+    const previousDateLabel = appointment.appointmentDate
+      ? new Date(appointment.appointmentDate).toDateString()
+      : '';
+    const previousStartLabel = appointment.startTime?.substring(0, 5) || '';
+
     // Update appointment
     const updateData: any = {
       appointmentDate,
@@ -688,6 +830,13 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
           model: Business,
           as: 'business',
           attributes: ['id', 'businessName', 'address', 'city', 'state', 'phone', 'email'],
+          include: [
+            {
+              model: User,
+              as: 'owner',
+              attributes: ['id', 'fullName', 'firstName', 'email'],
+            },
+          ],
         },
         {
           model: StaffMember,
@@ -699,8 +848,149 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response): Pr
           }],
           attributes: ['id', 'position'],
         },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
+        },
       ],
     });
+
+    if (updatedAppointment) {
+      const businessName = updatedAppointment.business?.businessName || 'Rendivo Partner';
+      const owner = updatedAppointment.business?.owner;
+      const ownerEmail = owner?.email || updatedAppointment.business?.email;
+      const ownerName = owner?.fullName || owner?.firstName;
+      const staffUser = updatedAppointment.staff?.user;
+      const staffEmail = staffUser?.email;
+      const staffName =
+        staffUser?.fullName ||
+        [staffUser?.firstName, staffUser?.lastName].filter(Boolean).join(' ') ||
+        undefined;
+      const customerEmail = updatedAppointment.customer?.email;
+      const customerName =
+        updatedAppointment.customer?.fullName ||
+        updatedAppointment.customer?.firstName ||
+        customerEmail ||
+        'Customer';
+      const newDateLabel = updatedAppointment.appointmentDate
+        ? new Date(updatedAppointment.appointmentDate).toDateString()
+        : '';
+      const newStartLabel = updatedAppointment.startTime?.substring(0, 5) || '';
+      const newEndLabel = updatedAppointment.endTime?.substring(0, 5) || '';
+      const appointmentId = updatedAppointment.id?.toString();
+
+      if (customerEmail) {
+        try {
+          await EmailService.sendAppointmentRescheduled({
+            email: customerEmail,
+            name: customerName,
+            businessName,
+            previousDate: previousDateLabel,
+            previousStartTime: previousStartLabel,
+            newDate: newDateLabel,
+            newStartTime: newStartLabel,
+            newEndTime: newEndLabel,
+          });
+        } catch (emailError) {
+          console.error('Failed to send reschedule email to customer:', emailError);
+        }
+      }
+
+      if (ownerEmail) {
+        try {
+          await EmailService.sendAppointmentRescheduled({
+            email: ownerEmail as string,
+            name: ownerName,
+            businessName,
+            previousDate: previousDateLabel,
+            previousStartTime: previousStartLabel,
+            newDate: newDateLabel,
+            newStartTime: newStartLabel,
+            newEndTime: newEndLabel,
+          });
+        } catch (emailError) {
+          console.error('Failed to send reschedule email to owner:', emailError);
+        }
+      }
+
+      if (staffEmail) {
+        try {
+          await EmailService.sendAppointmentRescheduled({
+            email: staffEmail as string,
+            name: staffName,
+            businessName,
+            previousDate: previousDateLabel,
+            previousStartTime: previousStartLabel,
+            newDate: newDateLabel,
+            newStartTime: newStartLabel,
+            newEndTime: newEndLabel,
+          });
+        } catch (emailError) {
+          console.error('Failed to send reschedule email to staff:', emailError);
+        }
+      }
+
+      const notificationTasks: Promise<void>[] = [];
+
+      if (updatedAppointment.customerId) {
+        notificationTasks.push(
+          notificationService
+            .sendNotification({
+              userId: updatedAppointment.customerId.toString(),
+              type: 'appointment_rescheduled',
+              title: 'Appointment rescheduled',
+              message: `${businessName} moved to ${newDateLabel} at ${newStartLabel}`,
+              relatedId: appointmentId,
+              relatedType: 'appointment',
+              actionUrl: `/appointments/${appointmentId}`,
+            })
+            .catch((error) => {
+              console.error('Failed to send customer reschedule notification:', error);
+            })
+        );
+      }
+
+      if (owner?.id) {
+        notificationTasks.push(
+          notificationService
+            .sendNotification({
+              userId: owner.id.toString(),
+              type: 'appointment_rescheduled',
+              title: 'Appointment rescheduled',
+              message: `${customerName} moved to ${newDateLabel} at ${newStartLabel}`,
+              relatedId: appointmentId,
+              relatedType: 'appointment',
+              actionUrl: `/appointments/${appointmentId}`,
+            })
+            .catch((error) => {
+              console.error('Failed to send owner reschedule notification:', error);
+            })
+        );
+      }
+
+      if (staffUser?.id) {
+        notificationTasks.push(
+          notificationService
+            .sendNotification({
+              userId: staffUser.id.toString(),
+              type: 'appointment_rescheduled',
+              title: 'Appointment rescheduled',
+              message: `${customerName} moved to ${newDateLabel} at ${newStartLabel}`,
+              relatedId: appointmentId,
+              relatedType: 'appointment',
+              actionUrl: `/appointments/${appointmentId}`,
+            })
+            .catch((error) => {
+              console.error('Failed to send staff reschedule notification:', error);
+            })
+        );
+      }
+
+      if (notificationTasks.length > 0) {
+        await Promise.all(notificationTasks);
+      }
+    }
 
     res.json({
       message: 'Appointment rescheduled successfully',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'screens/login_screen.dart';
 import 'services/backend_service.dart';
@@ -7,6 +8,7 @@ import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await Firebase.initializeApp();
   await NotificationService.instance.initialize();
   const apiBase = String.fromEnvironment('API_BASE_URL');

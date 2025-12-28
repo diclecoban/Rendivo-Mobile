@@ -42,3 +42,12 @@ export const passwordResetConfirmValidation = [
   body('code').isLength({ min: 4 }).withMessage('Reset code is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
 ];
+
+export const deviceTokenValidation = [
+  body('token').trim().notEmpty().withMessage('Device token is required'),
+  body('platform').optional().trim().isLength({ min: 2 }).withMessage('Platform is invalid'),
+];
+
+export const deviceTokenDeleteValidation = [
+  body('token').trim().notEmpty().withMessage('Device token is required'),
+];

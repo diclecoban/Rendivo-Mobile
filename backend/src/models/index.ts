@@ -5,8 +5,7 @@ import Service from './Service';
 import Appointment from './Appointment';
 import AppointmentService from './AppointmentService';
 import Shift from './Shift';
-import DeviceToken from './DeviceToken';
-import AppointmentReminder from './AppointmentReminder';
+import UserDeviceToken from './UserDeviceToken';
 
 // Define associations
 User.hasOne(Business, {
@@ -24,6 +23,11 @@ User.hasMany(StaffMember, {
   as: 'staffMemberships',
 });
 
+User.hasMany(UserDeviceToken, {
+  foreignKey: 'userId',
+  as: 'deviceTokens',
+});
+
 StaffMember.belongsTo(User, {
   foreignKey: 'userId',
   as: 'user',
@@ -39,12 +43,7 @@ StaffMember.belongsTo(Business, {
   as: 'business',
 });
 
-User.hasMany(DeviceToken, {
-  foreignKey: 'userId',
-  as: 'deviceTokens',
-});
-
-DeviceToken.belongsTo(User, {
+UserDeviceToken.belongsTo(User, {
   foreignKey: 'userId',
   as: 'user',
 });
@@ -127,6 +126,13 @@ Shift.belongsTo(Business, {
   as: 'business',
 });
 
-export { User, Business, StaffMember, Service, Appointment, AppointmentService, Shift };
-export { DeviceToken };
-export { AppointmentReminder };
+export {
+  User,
+  Business,
+  StaffMember,
+  Service,
+  Appointment,
+  AppointmentService,
+  Shift,
+  UserDeviceToken,
+};
