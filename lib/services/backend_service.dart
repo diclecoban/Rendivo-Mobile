@@ -271,6 +271,21 @@ class BackendService {
       return jsonBody
           .map((item) => Business.fromJson(Map<String, dynamic>.from(item)))
           .toList();
+      });
+    }
+
+  Future<List<String>> fetchAvailableServices({String? businessType}) async {
+    final query = <String, String>{};
+    if (businessType != null && businessType.isNotEmpty) {
+      query['businessType'] = businessType;
+    }
+    final uri = Uri.parse('$_baseUrl/services/all-unique')
+        .replace(queryParameters: query.isEmpty ? null : query);
+    final response = await _client.get(uri, headers: _headers());
+
+    return _handleResponse(response, (jsonBody) {
+      if (jsonBody is! List) return <String>[];
+      return jsonBody.map((item) => item.toString()).toList();
     });
   }
 

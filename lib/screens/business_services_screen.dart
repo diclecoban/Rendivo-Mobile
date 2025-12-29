@@ -45,11 +45,45 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   bool _loading = false;
   bool _submitting = false;
   String? _error;
+  bool _isPendingApproval = false;
 
   @override
   void initState() {
     super.initState();
-    _loadServices();
+    _isPendingApproval = widget.isPending ?? false;
+    _checkApprovalAndLoadServices();
+  }
+
+  Future<void> _checkApprovalAndLoadServices() async {
+    if (widget.isPending != null) {
+      await _loadServices();
+      return;
+    }
+
+    try {
+      final dashboard = await _backend.fetchBusinessDashboard();
+      final business = dashboard['business'] as Map?;
+      final status =
+          business?['approvalStatus']?.toString().toLowerCase() ?? '';
+
+      if (status == 'pending') {
+        if (mounted) {
+          setState(() => _isPendingApproval = true);
+        }
+      } else if (status == 'rejected') {
+        if (mounted) {
+          setState(() {
+            _error =
+                'Your business application has been rejected. Please contact support.';
+          });
+        }
+        return;
+      }
+    } catch (_) {
+      // If approval check fails, still attempt to load services.
+    }
+
+    await _loadServices();
   }
 
   Future<void> _loadServices() async {
@@ -74,7 +108,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   }
 
   Future<void> _openServiceEditor({ServiceItem? service}) async {
-    final isPending = widget.isPending ?? false;
+    final isPending = _isPendingApproval;
     if (isPending) return;
 
     final nameController =
@@ -292,7 +326,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   }
 
   Future<void> _deleteService(ServiceItem service) async {
-    final isPending = widget.isPending ?? false;
+    final isPending = _isPendingApproval;
     if (isPending) return;
     final confirm = await showDialog<bool>(
       context: context,
@@ -336,7 +370,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPending = widget.isPending ?? false;
+    final isPending = _isPendingApproval;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(

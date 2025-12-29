@@ -30,6 +30,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   bool _loading = false;
   bool _submitting = false;
   String? _error;
+  bool _isPendingApproval = false;
 
   List<ShiftItem> _shifts = [];
   List<StaffMember> _staff = [];
@@ -39,7 +40,40 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     super.initState();
     final now = DateTime.now();
     _currentDate = DateTime(now.year, now.month, 1);
-    _loadData();
+    _isPendingApproval = widget.isPending ?? false;
+    _checkApprovalAndFetchData();
+  }
+
+  Future<void> _checkApprovalAndFetchData() async {
+    if (widget.isPending != null) {
+      await _loadData();
+      return;
+    }
+
+    try {
+      final dashboard = await _backend.fetchBusinessDashboard();
+      final business = dashboard['business'] as Map?;
+      final status =
+          business?['approvalStatus']?.toString().toLowerCase() ?? '';
+
+      if (status == 'pending') {
+        if (mounted) {
+          setState(() => _isPendingApproval = true);
+        }
+      } else if (status == 'rejected') {
+        if (mounted) {
+          setState(() {
+            _error =
+                'Your business application has been rejected. Please contact support.';
+          });
+        }
+        return;
+      }
+    } catch (_) {
+      // If approval check fails, still attempt to load schedule data.
+    }
+
+    await _loadData();
   }
 
   Future<void> _loadData() async {
@@ -146,14 +180,42 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     return shift.staffName.isNotEmpty ? shift.staffName : 'Staff';
   }
 
+  Widget _buildStaffLegend() {
+    if (_staff.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: _staff.map((member) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: _staffColor(member.id),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _staffName(member),
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
   Color _staffColor(String staffId) {
     final colors = [
       const Color(0xFFFFE7EE),
-      const Color(0xFFEDE7FF),
-      const Color(0xFFE8F0FF),
-      const Color(0xFFE6F7F0),
-      const Color(0xFFFFF1E0),
-      const Color(0xFFE6F4F8),
+      const Color(0xFF4B3F72),
+      const Color(0xFF2F3E6E),
+      const Color(0xFF2F5D50),
+      const Color(0xFF3D3A5C),
+      const Color(0xFF1F4F5A),
     ];
     final index = (int.tryParse(staffId) ?? staffId.hashCode).abs();
     return colors[index % colors.length];
@@ -323,7 +385,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
     DateTime? selectedDate,
     ShiftItem? editingShift,
   }) async {
-    final isPending = widget.isPending ?? false;
+    final isPending = _isPendingApproval;
     if (isPending) return;
     if (_staff.isEmpty) {
       _showSnack('Add staff members before scheduling shifts.');
@@ -520,7 +582,7 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPending = widget.isPending ?? false;
+    final isPending = _isPendingApproval;
     final days = _getDaysInRange(_currentDate);
 
     return Scaffold(
@@ -641,11 +703,6 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
                   'Staff Schedule',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'Assign and manage staff shifts throughout the month.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
               ],
             ),
             ElevatedButton.icon(
@@ -710,6 +767,8 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
           ],
         ),
         const SizedBox(height: 12),
+        _buildStaffLegend(),
+        if (_staff.isNotEmpty) const SizedBox(height: 12),
         if (_staff.isEmpty)
           const Text(
             'No staff members available.',
@@ -1307,6 +1366,96 @@ class _CalendarGrid extends StatelessWidget {
     required this.staffName,
   });
 
+  List<String> _uniqueStaffIds(List<ShiftItem> shifts) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final shift in shifts) {
+      if (seen.add(shift.staffId)) {
+        result.add(shift.staffId);
+      }
+    }
+    return result;
+  }
+
+  Widget _buildShiftBackground(List<String> staffIds) {
+    final colors = staffIds.map(staffColor).toList();
+    if (colors.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (colors.length == 1) {
+      return Container(color: colors.first);
+    }
+    if (colors.length == 2) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final half = (constraints.maxWidth / 2).floorToDouble();
+          final remainder = constraints.maxWidth - half;
+          return Row(
+            children: [
+              SizedBox(width: half, child: Container(color: colors[0])),
+              SizedBox(width: remainder, child: Container(color: colors[1])),
+            ],
+          );
+        },
+      );
+    }
+    if (colors.length == 3) {
+      return Column(
+        children: [
+          Expanded(child: Container(color: colors[0])),
+          Expanded(child: Container(color: colors[1])),
+          Expanded(child: Container(color: colors[2])),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: Container(color: colors[0])),
+              Expanded(child: Container(color: colors[1])),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: Container(color: colors[2])),
+              Expanded(child: Container(color: colors[3])),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _staffIdForTap(
+    Offset position,
+    Size size,
+    List<String> staffIds,
+  ) {
+    if (staffIds.isEmpty) return '';
+    if (staffIds.length == 1) return staffIds.first;
+    if (staffIds.length == 2) {
+      return position.dx < size.width / 2
+          ? staffIds[0]
+          : staffIds[1];
+    }
+    if (staffIds.length == 3) {
+      final third = size.height / 3;
+      if (position.dy < third) return staffIds[0];
+      if (position.dy < third * 2) return staffIds[1];
+      return staffIds[2];
+    }
+    final isLeft = position.dx < size.width / 2;
+    final isTop = position.dy < size.height / 2;
+    if (isTop && isLeft) return staffIds[0];
+    if (isTop && !isLeft) return staffIds[1];
+    if (!isTop && isLeft) return staffIds[2];
+    return staffIds[3];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1338,83 +1487,87 @@ class _CalendarGrid extends StatelessWidget {
             final dayShifts = shiftsForDate(day.date);
             final isTodayDate = isToday(day.date);
             final isPast = isPastDate(day.date);
+            final hasShift = dayShifts.isNotEmpty;
+            final staffIds = hasShift ? _uniqueStaffIds(dayShifts) : <String>[];
+            final shiftTextColor =
+                hasShift ? staffTextColor(staffIds.first) : null;
 
-            return InkWell(
-              onTap: isPast ? null : () => onDayTap(day.date),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isPast
-                      ? const Color(0xFFF3F3F3)
-                      : isTodayDate
-                          ? const Color(0xFFFFF1F3)
-                          : Colors.white,
+            return Builder(
+              builder: (cellContext) {
+                return InkWell(
+                  onTapDown: (details) {
+                    if (isPast) return;
+                    if (!hasShift) return;
+                    final box =
+                        cellContext.findRenderObject() as RenderBox?;
+                    if (box == null) return;
+                    final size = box.size;
+                    final tappedStaffId =
+                        _staffIdForTap(details.localPosition, size, staffIds);
+                    final shift = dayShifts.firstWhere(
+                      (item) => item.staffId == tappedStaffId,
+                      orElse: () => dayShifts.first,
+                    );
+                    onShiftTap(shift);
+                  },
+                  onTap: isPast || hasShift ? null : () => onDayTap(day.date),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isTodayDate
-                        ? const Color(0xFFFFC1D3)
-                        : const Color(0xFFE8E8EE),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      day.date.day.toString(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isPast
-                            ? Colors.grey.shade500
-                            : isTodayDate
-                                ? primaryPink
-                                : Colors.black87,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: hasShift
+                          ? Colors.transparent
+                          : isPast
+                              ? const Color(0xFFF3F3F3)
+                              : isTodayDate
+                                  ? const Color(0xFFFFF1F3)
+                                  : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isTodayDate
+                            ? const Color(0xFFFFC1D3)
+                            : const Color(0xFFE8E8EE),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: dayShifts.isEmpty
-                          ? const SizedBox.shrink()
-                          : ListView.builder(
-                              padding: EdgeInsets.zero,
-                              physics: dayShifts.length <= 2
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const BouncingScrollPhysics(),
-                              itemCount: dayShifts.length,
-                              itemBuilder: (context, index) {
-                                final shift = dayShifts[index];
-                                return Padding(
-                                  padding:
-                                      EdgeInsets.only(bottom: index == dayShifts.length - 1 ? 0 : 4),
-                                  child: GestureDetector(
-                                    onTap: isPast ? null : () => onShiftTap(shift),
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: staffColor(shift.staffId),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        staffName(shift),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: staffTextColor(shift.staffId),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                    child: Stack(
+                      children: [
+                        if (hasShift)
+                          Positioned.fill(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: _buildShiftBackground(staffIds),
                             ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                day.date.day.toString(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: hasShift
+                                      ? shiftTextColor
+                                      : isPast
+                                          ? Colors.grey.shade500
+                                          : isTodayDate
+                                              ? primaryPink
+                                              : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Expanded(
+                                child: SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         ),

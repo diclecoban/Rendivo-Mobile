@@ -127,6 +127,10 @@ export const createShift = async (req: AuthRequest, res: Response): Promise<Resp
       },
     });
 
+    if (endTime <= startTime) {
+      return res.status(400).json({ message: 'End time must be after start time' });
+    }
+
     if (!staffMember) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
@@ -219,7 +223,11 @@ export const updateShift = async (req: AuthRequest, res: Response): Promise<Resp
     }
 
     const { staffId, shiftDate, startTime, endTime } = req.body;
-
+    const finalStartTime = startTime || shift.startTime;
+    const finalEndTime = endTime || shift.endTime;
+    if (finalEndTime <= finalStartTime) {
+      return res.status(400).json({ message: 'End time must be after start time' });
+    }
     // If staffId is being changed, validate the new staff member
     if (staffId && staffId !== shift.staffId) {
       const staffMember = await StaffMember.findOne({

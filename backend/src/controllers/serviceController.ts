@@ -1,6 +1,62 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { Service, Business } from '../models';
+import { getAllPredefinedServices, getServicesForCategory } from '../constants/serviceTypes';
+import { Op } from 'sequelize';
+
+// Get all unique service names (predefined + custom "Other" services)
+export const getAllUniqueServices = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const { businessType } = req.query;
+    
+    // Get predefined services based on category
+    let predefinedServices: string[];
+    if (businessType && typeof businessType === 'string') {
+      // Get services for specific category (excluding "Other")
+      predefinedServices = getServicesForCategory(businessType).filter(s => s !== 'Other');
+    } else {
+      // Get all predefined services if no category specified
+      predefinedServices = getAllPredefinedServices();
+    }
+    
+    // Build where clause for custom services
+    const whereClause: any = {
+      isActive: true,
+      name: {
+        [Op.notIn]: [...predefinedServices, 'Other'] // Exclude both predefined and "Other"
+      }
+    };
+    
+    // Get unique custom service names from database (where service is not in predefined list)
+    const customServices = await Service.findAll({
+      attributes: ['name'],
+      where: whereClause,
+      include: businessType && typeof businessType === 'string' ? [{
+        model: Business,
+        as: 'business',
+        attributes: [],
+        where: { 
+          businessType: businessType as string,
+          isActive: true,
+          approvalStatus: 'approved'
+        },
+        required: true
+      }] : [],
+      group: ['Service.name'],
+      raw: true
+    });
+
+    const customServiceNames = customServices.map((s: any) => s.name);
+    
+    // Combine predefined and custom services
+    const allServices = [...predefinedServices, ...customServiceNames].sort();
+    
+    res.json(allServices);
+  } catch (error: any) {
+    console.error('Get all unique services error:', error);
+    res.status(500).json({ message: 'Error fetching services', error: error.message });
+  }
+};
 
 // Get all services for a business
 export const getBusinessServices = async (req: AuthRequest, res: Response): Promise<Response | void> => {

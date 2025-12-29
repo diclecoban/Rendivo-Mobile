@@ -20,6 +20,8 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
   bool _isLoading = true;
   String? _error;
   String _selectedCategory = 'All';
+  List<String> _availableServices = [];
+  List<String> _selectedServices = [];
 
   final List<String> _categories = const [
     'All',
@@ -36,6 +38,7 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
   void initState() {
     super.initState();
     _loadBusinesses();
+    _fetchAvailableServices();
     _searchController.addListener(_applyFilters);
   }
 
@@ -57,9 +60,9 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
 
       setState(() {
         _businesses = snapshot;
-        _filteredBusinesses = snapshot;
         _isLoading = false;
       });
+      _applyFilters();
     } catch (e) {
       setState(() {
         _error = 'Unable to load businesses: $e';
@@ -68,8 +71,39 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
     }
   }
 
+  Future<void> _fetchAvailableServices() async {
+    try {
+      final category = _selectedCategory == 'All'
+          ? null
+          : _selectedCategory;
+      final services =
+          await _backend.fetchAvailableServices(businessType: category);
+      if (!mounted) return;
+      setState(() {
+        _availableServices = services;
+        if (_availableServices.isNotEmpty) {
+          final allowed = _availableServices
+              .map((item) => item.toLowerCase())
+              .toSet();
+          _selectedServices = _selectedServices
+              .where((item) => allowed.contains(item.toLowerCase()))
+              .toList();
+        }
+      });
+      _applyFilters();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _availableServices = [];
+      });
+    }
+  }
+
   void _applyFilters() {
     final query = _searchController.text.toLowerCase().trim();
+    final selectedServices = _selectedServices
+        .map((service) => service.toLowerCase())
+        .toSet();
 
     setState(() {
       _filteredBusinesses = _businesses.where((business) {
@@ -87,10 +121,206 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
         final matchesCategory =
             _selectedCategory == 'All' ||
                 type.contains(_selectedCategory.toLowerCase());
+        final matchesServices = selectedServices.isEmpty ||
+            business.services.any(
+              (service) => selectedServices.contains(
+                service.name.toLowerCase(),
+              ),
+            );
 
-        return matchesQuery && matchesCategory;
+        return matchesQuery && matchesCategory && matchesServices;
       }).toList();
     });
+  }
+
+  Future<void> _openServiceFilterModal() async {
+    final tempSelected = List<String>.from(_selectedServices);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter Services',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  if (_selectedCategory != 'All') ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Showing services for: $_selectedCategory',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF886385),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (_availableServices.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No services available yet. Try selecting a different category.',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 400,
+                      child: GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 3.6,
+                        ),
+                        itemCount: _availableServices.length,
+                        itemBuilder: (context, index) {
+                          final service = _availableServices[index];
+                          final isSelected = tempSelected.contains(service);
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              setModalState(() {
+                                if (isSelected) {
+                                  tempSelected.remove(service);
+                                } else {
+                                  tempSelected.add(service);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFFFEF5FF)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFDF84DC)
+                                      : const Color(0xFFE5DCE4),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value: isSelected,
+                                    onChanged: (_) {
+                                      setModalState(() {
+                                        if (isSelected) {
+                                          tempSelected.remove(service);
+                                        } else {
+                                          tempSelected.add(service);
+                                        }
+                                      });
+                                    },
+                                    activeColor: const Color(0xFFDF84DC),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      service,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF181117),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setModalState(tempSelected.clear);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text('Clear'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedServices = tempSelected;
+                            });
+                            _applyFilters();
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryPink,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Apply',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _onRefresh() async {
@@ -163,50 +393,52 @@ class _CustomerDiscoverScreenState extends State<CustomerDiscoverScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 38,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemBuilder: (_, index) {
-                    final label = _categories[index];
-                    final isSelected = label == _selectedCategory;
-                    return ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      onSelected: (_) {
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Services',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _openServiceFilterModal,
+                    icon: const Icon(Icons.tune, size: 16),
+                    label: Text(
+                      _selectedServices.isEmpty
+                          ? 'All services'
+                          : '${_selectedServices.length} selected',
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: primaryPink,
+                    ),
+                  ),
+                ],
+              ),
+              if (_selectedServices.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedServices.map((service) {
+                    return Chip(
+                      label: Text(service, style: const TextStyle(fontSize: 11)),
+                      onDeleted: () {
                         setState(() {
-                          _selectedCategory = label;
+                          _selectedServices.remove(service);
                         });
                         _applyFilters();
                       },
-                      selectedColor: primaryPink.withOpacity(0.18),
-                      backgroundColor: Colors.white,
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected ? primaryPink : Colors.black87,
-                      ),
-                      side: BorderSide(
-                        color: isSelected
-                            ? Colors.transparent
-                            : Colors.grey.shade300,
-                      ),
-                      shape: StadiumBorder(
-                        side: BorderSide(
-                          color: isSelected
-                              ? Colors.transparent
-                              : Colors.grey.shade200,
-                        ),
-                      ),
+                      deleteIconColor: Colors.grey.shade600,
+                      backgroundColor: const Color(0xFFF6E9F7),
                     );
-                  },
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemCount: _categories.length,
+                  }).toList(),
                 ),
-              ),
-              const SizedBox(height: 20),
+              ],
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

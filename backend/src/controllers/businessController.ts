@@ -3,16 +3,22 @@ import { AuthRequest } from '../middleware/auth';
 import { Business, User, StaffMember, Service, Appointment, Shift } from '../models';
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
+import { notificationService } from '../services/notificationService';
 
 // Get all active businesses (for discover page)
 export const getAllBusinesses = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
-    const { search, services } = req.query;
+    const { search, services, businessType } = req.query;
 
     const whereClause: any = {
       isActive: true,
       approvalStatus: 'approved',
     };
+
+    // Filter by business type (category)
+    if (businessType && typeof businessType === 'string') {
+      whereClause.businessType = businessType;
+    }
 
     // Search by business name or type
     if (search && typeof search === 'string') {
@@ -102,7 +108,26 @@ export const getBusinessById = async (req: AuthRequest, res: Response): Promise<
 // Get staff for a business
 export const getBusinessStaff = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
-    const { businessId } = req.params;
+    let businessId: number;
+    
+    // If businessId is in params, use it (public route)
+    if (req.params.businessId) {
+      businessId = parseInt(req.params.businessId);
+    } 
+    // Otherwise, get business of authenticated user (protected route)
+    else if (req.user?.id) {
+      const business = await Business.findOne({
+        where: { ownerId: req.user.id, isActive: true },
+      });
+      
+      if (!business) {
+        return res.status(404).json({ message: 'Business not found' });
+      }
+      
+      businessId = business.id;
+    } else {
+      return res.status(400).json({ message: 'Business ID required' });
+    }
 
     const staff = await StaffMember.findAll({
       where: {
@@ -331,6 +356,8 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       business: {
         id: business.id,
         name: business.businessName,
+        businessType: business.businessType,
+        approvalStatus: business.approvalStatus,
       },
       stats: {
         todayAppointments: totalAppointments,
@@ -354,6 +381,31 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
   } catch (error: any) {
     console.error('Get business dashboard error:', error);
     res.status(500).json({ message: 'Error fetching dashboard data', error: error.message });
+  }
+};
+
+// Get owner's business information
+export const getMyBusiness = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    // Get business owned by the user
+    const business = await Business.findOne({
+      where: { ownerId: userId, isActive: true },
+    });
+
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+
+    res.json(business);
+  } catch (error: any) {
+    console.error('Get my business error:', error);
+    res.status(500).json({ message: 'Error fetching business', error: error.message });
   }
 };
 
@@ -449,42 +501,124 @@ export const getBusinessAvailability = async (req: AuthRequest, res: Response): 
 };
 
 // Remove staff member (Business owner only)
-export const removeStaffMember = async (
-  req: AuthRequest,
-  res: Response
-): Promise<Response | void> => {
+export const removeStaffMember = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const { staffId } = req.params;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const business = await Business.findOne({ where: { ownerId: userId } });
+    // Get business owned by the user
+    const business = await Business.findOne({
+      where: { ownerId: userId, isActive: true },
+    });
+
     if (!business) {
       return res.status(404).json({ message: 'Business not found' });
     }
 
+    // Find staff member
     const staffMember = await StaffMember.findOne({
-      where: { id, businessId: business.id },
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'fullName', 'email'],
-        },
-      ],
+      where: {
+        id: staffId,
+        businessId: business.id
+      },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'email', 'firstName', 'lastName', 'fullName']
+      }]
     });
 
     if (!staffMember) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
-    staffMember.isActive = false;
-    await staffMember.save();
+    // Save staff data BEFORE deletion
+    const staffData = staffMember.toJSON() as any;
+    const staffUserId = staffData.user?.id;
+    const staffEmail = staffData.user?.email;
+    const staffFirstName = staffData.user?.firstName || 'Staff';
+    const staffLastName = staffData.user?.lastName || 'Member';
+    const staffFullName = staffData.user?.fullName || `${staffFirstName} ${staffLastName}`;
 
-    res.json({ message: 'Staff member removed' });
+    // Send goodbye EMAIL ONLY to staff (no notification - account will be deleted)
+    try {
+      const EmailService = (await import('../services/emailService')).default;
+      await EmailService.sendEmail({
+        to: staffEmail,
+        subject: '👋 Thank You for Your Service',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+            <h2 style="color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px;">👋 Thank You</h2>
+            <p style="color: #555; line-height: 1.6;">Hi ${staffFirstName}! 👋</p>
+            <p style="color: #555; line-height: 1.6;">We wanted to let you know that your staff membership at <strong>${business.businessName}</strong> has ended.</p>
+            <div style="background-color: white; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #007bff;">
+              <p style="margin: 5px 0;"><strong>🏢 Business:</strong> ${business.businessName}</p>
+              <p style="margin: 5px 0;"><strong>👤 Your Name:</strong> ${staffFullName}</p>
+            </div>
+            <p style="color: #555; line-height: 1.6;">Your account has been removed from the platform. Thank you so much for your hard work and dedication! We truly appreciate everything you've contributed. 💙</p>
+            <p style="color: #555; line-height: 1.6;">We wish you all the best in your future endeavors! You'll do amazing things! 🌟</p>
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">Best wishes for your future! ✨</p>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send removal email:', emailError);
+    }
+
+    // Send notification + email to business owner
+    try {
+      const owner = await User.findByPk(business.ownerId);
+      if (owner) {
+        await notificationService.sendNotification({
+          userId: business.ownerId.toString(),
+          type: 'staff_removed',
+          title: '👥 Staff Member Removed',
+          message: `${staffFullName} has been removed from your team`,
+          relatedId: business.id.toString(),
+          relatedType: 'appointment',
+          actionUrl: `/business/staff`,
+          emailData: {
+            to: owner.email,
+            subject: '👥 Staff Member Removed',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+                <h2 style="color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px;">👥 Team Update</h2>
+                <p style="color: #555; line-height: 1.6;">Hello! 👋</p>
+                <p style="color: #555; line-height: 1.6;">A staff member has been removed from your team.</p>
+                <div style="background-color: white; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #007bff;">
+                  <p style="margin: 5px 0;"><strong>👤 Staff Member:</strong> ${staffFullName}</p>
+                  <p style="margin: 5px 0;"><strong>📧 Email:</strong> ${staffEmail}</p>
+                  <p style="margin: 5px 0;"><strong>🏢 Business:</strong> ${business.businessName}</p>
+                </div>
+                <p style="color: #555; line-height: 1.6;">The staff member's account has been removed from the platform. 💙</p>
+                <p style="color: #999; font-size: 12px; margin-top: 30px;">Your team roster has been updated. 🌟</p>
+              </div>
+            `
+          }
+        });
+      }
+    } catch (notifError) {
+      console.error('Failed to send business owner notification:', notifError);
+    }
+
+    // NOW delete staff member record (hard delete) - AFTER emails/notifications sent
+    await staffMember.destroy();
+
+    // Delete user account (hard delete)
+    await User.destroy({ where: { id: staffUserId } });
+
+    res.json({
+      message: 'Staff member and account removed successfully',
+      staffMember: {
+        id: staffData.id,
+        name: staffFullName,
+        email: staffEmail
+      }
+    });
   } catch (error: any) {
     console.error('Remove staff member error:', error);
     res.status(500).json({ message: 'Error removing staff member', error: error.message });
