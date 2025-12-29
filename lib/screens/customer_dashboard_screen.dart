@@ -130,11 +130,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
       }
       final now = DateTime.now();
       final upcoming = appointments
-          .where(
-            (a) =>
-                a.startAt.isAfter(now) &&
-                a.status.toLowerCase() != 'cancelled',
-          )
+          .where((a) => a.startAt.isAfter(now))
           .toList()
         ..sort((a, b) => a.startAt.compareTo(b.startAt));
 

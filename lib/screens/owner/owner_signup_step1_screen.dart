@@ -13,7 +13,8 @@ class BusinessOwnerSignUpScreen extends StatefulWidget {
 }
 
 class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
-  final _fullNameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -22,7 +23,8 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
 
   @override
   void dispose() {
-    _fullNameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -113,9 +115,9 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
 
                 const SizedBox(height: 24),
 
-                // Full Name
+                // First Name
                 const Text(
-                  'Full Name',
+                  'First Name',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -124,8 +126,25 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
                 ),
                 const SizedBox(height: 8),
                 buildOwnerTextField(
-                  controller: _fullNameController,
-                  hintText: 'Enter your full name',
+                  controller: _firstNameController,
+                  hintText: 'Enter your first name',
+                ),
+
+                const SizedBox(height: 16),
+
+                // Last Name
+                const Text(
+                  'Last Name',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                buildOwnerTextField(
+                  controller: _lastNameController,
+                  hintText: 'Enter your last name',
                 ),
 
                 const SizedBox(height: 16),
@@ -288,9 +307,21 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
                         child: ElevatedButton(
                           onPressed: _isTermsAccepted
                               ? () {
+                                  if (_firstNameController.text.trim().isEmpty ||
+                                      _lastNameController.text.trim().isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please enter your first and last name.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   // Save to model
                                   final model = OwnerSignupModel.instance;
-                                  model.fullName = _fullNameController.text.trim();
+                                  model.firstName = _firstNameController.text.trim();
+                                  model.lastName = _lastNameController.text.trim();
                                   model.email = _emailController.text.trim();
                                   model.password = _passwordController.text;
 
@@ -313,13 +344,13 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
                             elevation: 0,
                           ),
                           child: const Text(
-                                  'Next Step',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            'Next Step',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                     ),

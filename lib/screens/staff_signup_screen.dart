@@ -14,7 +14,8 @@ class StaffSignUpScreen extends StatefulWidget {
 }
 
 class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
-  final _fullNameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -26,7 +27,8 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
 
   @override
   void dispose() {
-    _fullNameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -97,9 +99,9 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
 
                 const SizedBox(height: 24),
 
-                // Full Name
+                // First Name
                 const Text(
-                  'Full Name',
+                  'First Name',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -108,8 +110,25 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
                 ),
                 const SizedBox(height: 8),
                 _buildTextField(
-                  controller: _fullNameController,
-                  hintText: 'Enter your full name',
+                  controller: _firstNameController,
+                  hintText: 'Enter your first name',
+                ),
+
+                const SizedBox(height: 16),
+
+                // Last Name
+                const Text(
+                  'Last Name',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _lastNameController,
+                  hintText: 'Enter your last name',
                 ),
 
                 const SizedBox(height: 16),
@@ -367,13 +386,15 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-    final fullName = _fullNameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
     final businessId = _businessIdController.text.trim();
 
-    if (fullName.isEmpty ||
+    if (firstName.isEmpty ||
+        lastName.isEmpty ||
         email.isEmpty ||
         password.isEmpty ||
         businessId.isEmpty) {
@@ -389,7 +410,8 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
     setState(() => _isSubmitting = true);
     try {
       await AuthService.registerStaff(
-        fullName: fullName,
+        firstName: firstName,
+        lastName: lastName,
         email: email,
         password: password,
         businessId: businessId,

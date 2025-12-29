@@ -29,13 +29,15 @@ class AuthService {
   }
 
   static Future<AuthUser> registerStaff({
-    required String fullName,
+    required String firstName,
+    required String lastName,
     required String email,
     required String password,
     required String businessId,
   }) async {
     return _backend.registerStaff(
-      fullName: fullName,
+      firstName: firstName,
+      lastName: lastName,
       email: email,
       password: password,
       businessId: businessId,

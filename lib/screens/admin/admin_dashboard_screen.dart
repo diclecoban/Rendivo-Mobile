@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_snackbar.dart';
 import '../../models/app_models.dart';
+import '../../services/auth_service.dart';
 import '../../services/backend_service.dart';
+import '../login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -129,6 +131,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Future<void> _logout() async {
+    AuthService.signOut();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final body = _buildBody();
@@ -149,6 +161,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           IconButton(
             onPressed: _isLoading ? null : _loadApplications,
             icon: const Icon(Icons.refresh),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                _logout();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'logout',
+                child: Text(
+                  'Çıkış yap',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ),
+            ],
+            icon: const Icon(Icons.more_vert),
           ),
         ],
       ),

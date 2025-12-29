@@ -14,10 +14,23 @@ class AuthUser {
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json, {String? token}) {
+    final rawFullName =
+        (json['fullName'] ?? json['name'] ?? '').toString().trim();
+    final first = (json['firstName'] ?? '').toString().trim();
+    final last = (json['lastName'] ?? '').toString().trim();
+
+    String resolvedName = rawFullName;
+    if (resolvedName.isEmpty) {
+      resolvedName = [first, last].where((value) => value.isNotEmpty).join(' ');
+    }
+    if (resolvedName.isEmpty) {
+      resolvedName = (json['email'] ?? '').toString();
+    }
+
     return AuthUser(
       id: (json['id'] ?? '').toString(),
       email: json['email'] ?? '',
-      fullName: json['fullName'] ?? json['name'] ?? '',
+      fullName: resolvedName,
       role: json['role'] ?? 'customer',
       authToken: token,
     );

@@ -164,6 +164,8 @@ class BackendService {
       headers: _headers(),
       body: jsonEncode({
         'fullName': model.fullName,
+        'firstName': model.firstName,
+        'lastName': model.lastName,
         'email': model.email,
         'password': model.password,
         'businessName': model.businessName,
@@ -191,17 +193,21 @@ class BackendService {
   }
 
   Future<AuthUser> registerStaff({
-    required String fullName,
+    required String firstName,
+    required String lastName,
     required String email,
     required String password,
     required String businessId,
   }) async {
     final uri = Uri.parse('$_baseUrl/auth/register/staff');
+    final fullName = '$firstName $lastName'.trim();
     final response = await _client.post(
       uri,
       headers: _headers(),
       body: jsonEncode({
         'fullName': fullName,
+        'firstName': firstName,
+        'lastName': lastName,
         'email': email,
         'password': password,
         'businessId': businessId,
@@ -549,8 +555,11 @@ class BackendService {
   }
 
   // Appointments
-  Future<List<Appointment>> fetchCustomerAppointments() {
-    return fetchAppointments();
+  Future<List<Appointment>> fetchCustomerAppointments() async {
+    final appointments = await fetchAppointments();
+    return appointments
+        .where((appt) => appt.status.toLowerCase() != 'cancelled')
+        .toList();
   }
 
   Future<List<Appointment>> fetchAppointments() async {
