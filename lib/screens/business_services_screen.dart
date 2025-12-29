@@ -26,21 +26,90 @@ class BusinessServicesScreen extends StatefulWidget {
 class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   final _backend = BackendService.instance;
 
-  final List<String> _availableServices = const [
-    'Haircut & Styling',
-    'Massage Therapy',
-    'Nail Treatment',
-    'Facial Treatment',
-    'Waxing',
-    'Makeup',
-    'Spa Treatment',
-    'Body Treatment',
-    'Skin Care',
+  static const List<String> _predefinedServices = [
+    'Haircut',
     'Hair Coloring',
+    'Blowdry & Styling',
+    'Beard Trim',
     'Manicure',
     'Pedicure',
+    'Gel Nails',
+    'Facial',
+    'Waxing',
+    'Eyebrow Shaping',
+    'Eyelash Extensions',
+    'Makeup',
+    'Massage',
+    'General Consultation',
+    'Dental Checkup',
+    'Dental Cleaning',
+    'Teeth Whitening',
+    'Physiotherapy Session',
+    'Blood Test',
+    'X-Ray',
+    'Vaccination',
+    'Health Screening',
+    'Eye Exam',
+    'Personal Training',
+    'Group Fitness Class',
+    'Yoga Session',
+    'Pilates',
+    'Spinning Class',
+    'Boxing Training',
+    'Swimming Lesson',
+    'Nutrition Consultation',
+    'Fitness Assessment',
+    'Legal Consultation',
+    'Accounting Service',
+    'Tax Preparation',
+    'Business Consulting',
+    'Financial Planning',
+    'Marketing Consultation',
+    'IT Support',
+    'Career Coaching',
+    'Math Tutoring',
+    'English Tutoring',
+    'Science Tutoring',
+    'Language Lesson',
+    'Music Lesson',
+    'Art Class',
+    'Test Prep',
+    'Online Course',
+    'Dog Grooming',
+    'Cat Grooming',
+    'Pet Bath',
+    'Nail Trimming',
+    'Vet Consultation',
+    'Pet Training',
+    'Dog Walking',
+    'Pet Sitting',
+    'Car Wash',
+    'Interior Detailing',
+    'Exterior Detailing',
+    'Full Detailing',
+    'Oil Change',
+    'Tire Change',
+    'Vehicle Inspection',
+    'Car Repair',
+    'Portrait Session',
+    'Event Photography',
+    'Wedding Photography',
+    'Product Photography',
+    'Video Editing',
+    'Studio Session',
+    'Photo Retouching',
+    'Individual Therapy',
+    'Couples Therapy',
+    'Family Therapy',
+    'Life Coaching',
+    'Career Counseling',
+    'Stress Management',
+    'Mental Health Consultation',
+    'Other',
   ];
 
+  List<String> _availableServices = [];
+  String _businessType = '';
   List<ServiceItem> _services = [];
   bool _loading = false;
   bool _submitting = false;
@@ -55,16 +124,35 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   }
 
   Future<void> _checkApprovalAndLoadServices() async {
+    Map<String, dynamic>? dashboard;
+    Map<String, dynamic>? business;
     if (widget.isPending != null) {
+      try {
+        dashboard = await _backend.fetchBusinessDashboard();
+        final businessRaw = dashboard['business'];
+        business = businessRaw is Map
+            ? Map<String, dynamic>.from(businessRaw)
+            : null;
+        final type = business?['businessType']?.toString() ?? '';
+        if (mounted) {
+          setState(() => _businessType = type);
+        }
+      } catch (_) {
+        // Ignore business metadata failures for pending approval flow.
+      }
+      await _loadAvailableServices(useBusinessType: false);
       await _loadServices();
       return;
     }
 
     try {
-      final dashboard = await _backend.fetchBusinessDashboard();
-      final business = dashboard['business'] as Map?;
+      dashboard = await _backend.fetchBusinessDashboard();
+      final businessRaw = dashboard['business'];
+      business =
+          businessRaw is Map ? Map<String, dynamic>.from(businessRaw) : null;
       final status =
           business?['approvalStatus']?.toString().toLowerCase() ?? '';
+      final type = business?['businessType']?.toString() ?? '';
 
       if (status == 'pending') {
         if (mounted) {
@@ -79,11 +167,40 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
         }
         return;
       }
+      if (mounted) {
+        setState(() => _businessType = type);
+      }
     } catch (_) {
       // If approval check fails, still attempt to load services.
     }
 
+    await _loadAvailableServices(useBusinessType: false);
     await _loadServices();
+  }
+
+  Future<void> _loadAvailableServices({bool useBusinessType = false}) async {
+    final resolvedType = useBusinessType ? _businessType : null;
+    try {
+      final services =
+          await _backend.fetchAvailableServices(businessType: resolvedType);
+      final merged = <String>[];
+      final seen = <String>{};
+      for (final item in _predefinedServices) {
+        if (seen.add(item)) merged.add(item);
+      }
+      for (final item in services) {
+        if (seen.add(item)) merged.add(item);
+      }
+      if (!mounted) return;
+      setState(() {
+        _availableServices = merged;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _availableServices = _predefinedServices;
+      });
+    }
   }
 
   Future<void> _loadServices() async {
@@ -110,6 +227,9 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
   Future<void> _openServiceEditor({ServiceItem? service}) async {
     final isPending = _isPendingApproval;
     if (isPending) return;
+    if (_availableServices.isEmpty) {
+      await _loadAvailableServices();
+    }
 
     final nameController =
         TextEditingController(text: service?.name ?? '');
@@ -122,10 +242,14 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
       text: service != null ? service.price.toStringAsFixed(2) : '',
     );
 
-    String? selectedName;
+    String? selectedName = service?.name.isNotEmpty == true
+        ? service!.name
+        : null;
+    final dropdownServices = List<String>.from(_availableServices);
     if (service != null &&
-        _availableServices.contains(service.name)) {
-      selectedName = service.name;
+        service.name.isNotEmpty &&
+        !dropdownServices.contains(service.name)) {
+      dropdownServices.insert(0, service.name);
     }
 
     await showModalBottomSheet<void>(
@@ -139,12 +263,20 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             Future<void> saveService() async {
-              final name =
-                  selectedName ?? nameController.text.trim();
+              final customName = nameController.text.trim();
+              final name = selectedName == 'Other' && customName.isNotEmpty
+                  ? customName
+                  : selectedName?.trim() ?? '';
               final durationText = durationController.text.trim();
               final priceText = priceController.text.trim();
               if (name.isEmpty || durationText.isEmpty || priceText.isEmpty) {
                 _showSnack('Please fill in all required fields.');
+                return;
+              }
+              if (service == null &&
+                  selectedName != 'Other' &&
+                  !dropdownServices.contains(name)) {
+                _showSnack('Please select a service name from the list.');
                 return;
               }
 
@@ -220,7 +352,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: selectedName,
-                      items: _availableServices
+                      items: dropdownServices
                           .map(
                             (item) => DropdownMenuItem(
                               value: item,
@@ -236,19 +368,21 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
                         setModalState(() {
                           selectedName = value;
                         });
-                        if (value != null) {
-                          nameController.text = value;
+                        if (value != 'Other') {
+                          nameController.text = '';
                         }
                       },
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Custom name (optional)',
-                        border: OutlineInputBorder(),
+                    if (selectedName == 'Other') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Custom name',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 12),
                     TextField(
                       controller: descriptionController,

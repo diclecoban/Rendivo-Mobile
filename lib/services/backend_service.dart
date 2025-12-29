@@ -612,6 +612,7 @@ class BackendService {
         'appointmentDate': _formatDate(startAt),
         'startTime': _formatTime(startAt),
         'endTime': _formatTime(endAt),
+        'status': 'confirmed',
         'notes': notes ?? '',
       }),
     );
