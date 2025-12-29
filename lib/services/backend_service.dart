@@ -496,6 +496,15 @@ class BackendService {
     });
   }
 
+  Future<void> removeStaffMember(String staffId) async {
+    final uri = Uri.parse('$_baseUrl/business/staff/$staffId');
+    final response = await _client.delete(
+      uri,
+      headers: _headers(withAuth: true),
+    );
+    _handleResponse(response, (_) => null);
+  }
+
   Future<ShiftItem> createShift({
     required String staffId,
     required DateTime shiftDate,

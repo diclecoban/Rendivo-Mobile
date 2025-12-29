@@ -34,6 +34,7 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
   String _statusFilter = 'all';
   String _roleFilter = 'all';
   bool _copySuccess = false;
+  String? _removingStaffId;
 
   final List<String> _defaultRoles = const [
     'Senior Stylist',
@@ -179,8 +180,23 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
         ],
       ),
     );
-    if (confirm == true) {
-      _showSnack('Removing staff is not supported yet.');
+    if (confirm != true) return;
+
+    setState(() => _removingStaffId = member.id);
+
+    try {
+      await _backend.removeStaffMember(member.id);
+      setState(() {
+        _staff = _staff.where((item) => item.id != member.id).toList();
+        _removingStaffId = null;
+      });
+      _showSnack('${member.displayName} removed from your team.');
+    } on AppException catch (e) {
+      setState(() => _removingStaffId = null);
+      _showSnack(e.message);
+    } catch (e) {
+      setState(() => _removingStaffId = null);
+      _showSnack('Failed to remove staff member.');
     }
   }
 
@@ -392,6 +408,7 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
           ...filtered.map(
             (member) => _StaffCard(
               member: member,
+              isDeleting: _removingStaffId == member.id,
               onView: () => _showStaffDetails(member),
               onDelete: () => _confirmDelete(member),
             ),
@@ -409,11 +426,13 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
 
 class _StaffCard extends StatelessWidget {
   final StaffProfile member;
+  final bool isDeleting;
   final VoidCallback onView;
   final VoidCallback onDelete;
 
   const _StaffCard({
     required this.member,
+    required this.isDeleting,
     required this.onView,
     required this.onDelete,
   });
@@ -473,13 +492,19 @@ class _StaffCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: onView,
+            onPressed: isDeleting ? null : onView,
             icon: const Icon(Icons.visibility_outlined, size: 20),
           ),
-          IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline, size: 20),
-          ),
+          isDeleting
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                ),
         ],
       ),
     );
