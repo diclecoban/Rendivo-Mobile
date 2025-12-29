@@ -4,28 +4,7 @@ import { Business, User, StaffMember, Service, Appointment, Shift } from '../mod
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import { notificationService } from '../services/notificationService';
-import {
-  AppointmentWithRelations,
-  cancelAppointmentRecord,
-} from '../services/appointmentCancellationService';
-
-const getAppointmentStartAt = (appointment: Appointment): Date | null => {
-  try {
-    if (!appointment.appointmentDate || !appointment.startTime) return null;
-    const dateValue =
-      appointment.appointmentDate instanceof Date
-        ? appointment.appointmentDate
-        : new Date(appointment.appointmentDate);
-    const dateStr = dateValue.toISOString().split('T')[0];
-    const startTime =
-      appointment.startTime.length === 5
-        ? `${appointment.startTime}:00`
-        : appointment.startTime;
-    return new Date(`${dateStr}T${startTime}`);
-  } catch {
-    return null;
-  }
-};
+import { AppointmentStatus } from '../models/Appointment';
 
 // Get all active businesses (for discover page)
 export const getAllBusinesses = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -558,66 +537,79 @@ export const removeStaffMember = async (req: AuthRequest, res: Response): Promis
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
-    // Cancel upcoming appointments assigned to this staff member
-    const todayStr = new Date().toISOString().split('T')[0];
-    const upcomingAppointments = await Appointment.findAll({
+    const activeAppointments = await Appointment.findAll({
       where: {
         staffId: staffMember.id,
-        appointmentDate: { [Op.gte]: todayStr },
+        status: {
+          [Op.in]: [ AppointmentStatus.CONFIRMED],
+        },
       },
       include: [
         {
-          model: Service,
-          as: 'services',
-          attributes: ['name'],
-          through: { attributes: [] },
-        },
-        {
           model: Business,
           as: 'business',
-          attributes: ['businessName', 'email', 'ownerId'],
-          include: [
-            {
-              model: User,
-              as: 'owner',
-              attributes: ['id', 'fullName', 'firstName', 'email'],
-            },
-          ],
-        },
-        {
-          model: StaffMember,
-          as: 'staff',
-          include: [
-            {
-              model: User,
-              as: 'user',
-              attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
-            },
-          ],
+          attributes: ['id', 'businessName'],
         },
         {
           model: User,
           as: 'customer',
-          attributes: ['id', 'fullName', 'email'],
+          attributes: ['id', 'email', 'firstName', 'lastName'],
+        },
+        {
+          model: Service,
+          as: 'services',
+          through: { attributes: [] },
+          attributes: ['id', 'name'],
         },
       ],
     });
 
-    const now = new Date();
-    for (const appointment of upcomingAppointments) {
-      const startAt = getAppointmentStartAt(appointment);
-      if (!startAt || startAt <= now) {
-        continue;
-      }
+    const cancelledAppointments: number[] = [];
+
+    for (const appointment of activeAppointments) {
+      await appointment.update({ status: AppointmentStatus.CANCELLED });
+      cancelledAppointments.push(appointment.id);
 
       try {
-        await cancelAppointmentRecord(appointment as AppointmentWithRelations, {
-          cancelledBy: 'business',
-          notifyStaff: false,
-        });
+        const appointmentData = appointment.toJSON() as any;
+        const appointmentDate =
+          appointment.appointmentDate instanceof Date
+            ? appointment.appointmentDate.toISOString().split('T')[0]
+            : appointment.appointmentDate;
+        const appointmentDateTime = `${appointmentDate} at ${appointment.startTime}`;
+        const businessName =
+          appointmentData.business?.businessName || business.businessName;
+        const customerEmail = appointmentData.customer?.email;
+        const customerName = appointmentData.customer?.firstName;
+
+        if (customerEmail) {
+          const EmailService = (await import('../services/emailService')).default;
+          await EmailService.sendAppointmentCancellation({
+            email: customerEmail,
+            name: customerName,
+            businessName,
+            appointmentDate,
+            startTime:
+              appointment.startTime.length === 5
+                ? appointment.startTime
+                : appointment.startTime.substring(0, 5),
+          });
+        }
+
+        if (appointmentData.customer?.id) {
+          await notificationService.sendNotification({
+            userId: appointmentData.customer.id.toString(),
+            type: 'appointment_cancelled_by_business',
+            title: 'Appointment cancelled',
+            message: `Your appointment at ${businessName} on ${appointmentDateTime} was cancelled because your specialist is no longer available.`,
+            relatedId: appointment.id.toString(),
+            relatedType: 'appointment',
+            actionUrl: `/appointments/${appointment.id}`,
+          });
+        }
       } catch (cancelError) {
         console.error(
-          `Failed to cancel appointment ${appointment.id} before removing staff:`,
+          `Failed to notify customer for appointment ${appointment.id} cancellation:`,
           cancelError
         );
       }
@@ -704,7 +696,8 @@ export const removeStaffMember = async (req: AuthRequest, res: Response): Promis
         id: staffData.id,
         name: staffFullName,
         email: staffEmail
-      }
+      },
+      cancelledAppointments
     });
   } catch (error: any) {
     console.error('Remove staff member error:', error);
