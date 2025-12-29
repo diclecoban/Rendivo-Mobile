@@ -15,27 +15,24 @@ const BRAND_COLOR = process.env.EMAIL_BRAND_COLOR || '#E91E63';
 const BRAND_ACCENT = process.env.EMAIL_BRAND_ACCENT || '#FCE4EC';
 const BRAND_LOGO = process.env.EMAIL_LOGO_URL;
 
-const renderBrandHeader = (): string => {
-  if (BRAND_LOGO) {
-    return `<img src="${BRAND_LOGO}" alt="${BRAND_NAME} logo" style="max-width:140px;height:auto;margin-bottom:8px;"/>`;
-  }
-  return `<div style="font-size:20px;font-weight:700;color:${BRAND_COLOR};">${BRAND_NAME}</div>`;
-};
-
 const renderEmailLayout = (title: string, body: string): string => `
-  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background:${BRAND_ACCENT}; padding:32px;">
-    <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,0.08);">
-      <div style="text-align:center;padding:28px 24px 8px;">
-        ${renderBrandHeader()}
-        <p style="margin:0;color:#666;font-size:14px;">${BRAND_NAME} notifications</p>
+  <div style="font-family: Arial, sans-serif; line-height:1.6; color:#333; background-color:#f9f9f9; padding:20px;">
+    <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 8px 24px rgba(15,23,42,0.08);">
+      <div style="text-align:center;margin-bottom:12px;">
+        ${
+          BRAND_LOGO
+            ? `<img src="${BRAND_LOGO}" alt="${BRAND_NAME} logo" style="max-width:140px;height:auto;margin-bottom:8px;"/>`
+            : `<div style="font-size:20px;font-weight:700;color:${BRAND_COLOR};">${BRAND_NAME}</div>`
+        }
+        <p style="margin:0;color:#94a3b8;font-size:13px;">${BRAND_NAME} notifications</p>
       </div>
-      <div style="padding:0 24px 24px;border-top:4px solid ${BRAND_COLOR};">
-        <h2 style="color:${BRAND_COLOR};font-size:22px;margin-top:24px;">${title}</h2>
-        ${body}
-        <p style="font-size:12px;color:#999;border-top:1px solid #eee;margin-top:24px;padding-top:16px;">
-          This message was sent automatically by ${BRAND_NAME}. Please do not reply directly to this email.
-        </p>
-      </div>
+      <h2 style="color:#0f172a;border-bottom:3px solid ${BRAND_COLOR};padding-bottom:10px;margin:0 0 16px;font-size:22px;">
+        ${title}
+      </h2>
+      ${body}
+      <p style="font-size:12px;color:#94a3b8;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;">
+        This email was sent automatically by ${BRAND_NAME}. If you need help, contact our support team anytime.
+      </p>
     </div>
   </div>
 `;
