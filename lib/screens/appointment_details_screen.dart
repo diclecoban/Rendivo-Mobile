@@ -185,6 +185,9 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
     final staffName = _appointment.staffName ?? 'Team Member';
     final services = _appointment.services;
     final status = _appointment.status;
+    final now = DateTime.now();
+    final canModify =
+        status != 'cancelled' && start.isAfter(now) && !_isActionInProgress;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -375,7 +378,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
             width: double.infinity,
             height: 44,
             child: ElevatedButton(
-              onPressed: _isActionInProgress ? null : _handleReschedule,
+              onPressed: canModify ? _handleReschedule : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryPink,
                 shape: RoundedRectangleBorder(
@@ -419,7 +422,7 @@ class _AppointmentDetailsScreenState extends State<AppointmentDetailsScreen> {
           const SizedBox(height: 8),
           Center(
             child: TextButton(
-              onPressed: _isActionInProgress ? null : _handleCancel,
+              onPressed: canModify ? _handleCancel : null,
               child: const Text(
                 'Cancel Appointment',
                 style: TextStyle(

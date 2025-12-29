@@ -6,6 +6,23 @@ import { AppointmentStatus } from '../models/Appointment';
 import EmailService from '../services/emailService';
 import { notificationService } from '../services/notificationService';
 
+const getAppointmentStartAt = (appointment: Appointment): Date | null => {
+  try {
+    if (!appointment.appointmentDate || !appointment.startTime) return null;
+    const dateValue =
+      appointment.appointmentDate instanceof Date
+        ? appointment.appointmentDate
+        : new Date(appointment.appointmentDate);
+    const dateStr = dateValue.toISOString().split('T')[0];
+    const startTime = appointment.startTime.length === 5
+      ? `${appointment.startTime}:00`
+      : appointment.startTime;
+    return new Date(`${dateStr}T${startTime}`);
+  } catch {
+    return null;
+  }
+};
+
 // Create a new appointment
 export const createAppointment = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
@@ -437,6 +454,11 @@ export const getAppointmentById = async (req: AuthRequest, res: Response): Promi
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    const startAt = getAppointmentStartAt(appointment);
+    if (isCustomer && startAt && startAt <= new Date()) {
+      return res.status(400).json({ message: 'Past appointments cannot be cancelled.' });
+    }
+
     res.json(appointment);
   } catch (error: any) {
     console.error('Get appointment error:', error);
@@ -570,6 +592,11 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
 
     if (!isCustomer && !isBusinessOwner) {
       return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const startAt = getAppointmentStartAt(appointment);
+    if (isCustomer && startAt && startAt <= new Date()) {
+      return res.status(400).json({ message: 'Past appointments cannot be rescheduled.' });
     }
 
     const appointmentDate = appointment.appointmentDate;

@@ -126,6 +126,11 @@ class _CustomerAppointmentsScreenState
     }
   }
 
+  bool _canModifyAppointment(Appointment appointment) {
+    final now = DateTime.now();
+    return appointment.status != 'cancelled' && appointment.startAt.isAfter(now);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -189,6 +194,7 @@ class _CustomerAppointmentsScreenState
               appointment: appt,
               onCancel: () => _cancelAppointment(appt),
               onReschedule: () => _rescheduleAppointment(appt),
+              canModify: _canModifyAppointment(appt),
               onTap: () => _openDetails(appt),
             ),
           ),
@@ -286,12 +292,14 @@ class _AppointmentCard extends StatelessWidget {
   final Appointment appointment;
   final VoidCallback onCancel;
   final VoidCallback onReschedule;
+  final bool canModify;
   final VoidCallback? onTap;
 
   const _AppointmentCard({
     required this.appointment,
     required this.onCancel,
     required this.onReschedule,
+    required this.canModify,
     this.onTap,
   });
 
@@ -391,7 +399,7 @@ class _AppointmentCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: status == 'cancelled' ? null : onCancel,
+                    onPressed: canModify ? onCancel : null,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: BorderSide(color: Colors.grey.shade300),
@@ -408,7 +416,7 @@ class _AppointmentCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: status == 'cancelled' ? null : onReschedule,
+                    onPressed: canModify ? onReschedule : null,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       backgroundColor: primaryPink,
