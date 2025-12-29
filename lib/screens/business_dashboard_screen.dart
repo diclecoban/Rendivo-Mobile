@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
@@ -325,7 +325,7 @@ class _ServiceRow extends StatelessWidget {
                 ),
               ),
               Text(
-                '${service.durationMinutes} min · \$${service.price.toStringAsFixed(2)}',
+                '${service.durationMinutes} min Â· \$${service.price.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
@@ -751,102 +751,6 @@ class _DashboardContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Upcoming Appointments (${upcomingAppointments.length})',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                BusinessAppointmentsScreen(isPending: false),
-                          ),
-                        );
-                      },
-                      child: const Text('View Appointments'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (upcomingAppointments.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(
-                      child: Text(
-                        'No upcoming appointments',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ),
-                  )
-                else
-                  ...upcomingAppointments.map(
-                    (appointment) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: primaryPink.withOpacity(0.15),
-                            child: Text(
-                              appointment.client.isNotEmpty
-                                  ? appointment.client[0].toUpperCase()
-                                  : 'C',
-                              style: const TextStyle(
-                                color: primaryPink,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${appointment.service} - ${appointment.staff}',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  appointment.client,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            appointment.time,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _CardContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
                 const Text(
                   'Staff Availability',
                   style: TextStyle(
@@ -995,6 +899,102 @@ class _DashboardContent extends StatelessWidget {
                     ],
                   ),
           ),
+          const SizedBox(height: 16),
+          _CardContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Upcoming Appointments (${upcomingAppointments.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                BusinessAppointmentsScreen(isPending: false),
+                          ),
+                        );
+                      },
+                      child: const Text('View Appointments'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (upcomingAppointments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: Text(
+                        'No upcoming appointments',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ),
+                  )
+                else
+                  ...upcomingAppointments.map(
+                    (appointment) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: primaryPink.withOpacity(0.15),
+                            child: Text(
+                              appointment.client.isNotEmpty
+                                  ? appointment.client[0].toUpperCase()
+                                  : 'C',
+                              style: const TextStyle(
+                                color: primaryPink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${appointment.service} - ${appointment.staff}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  appointment.client,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            appointment.time,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -1039,12 +1039,12 @@ class _PendingApprovalView extends StatelessWidget {
     }
 
     final headline = _isRejected
-        ? 'Başvurunuz reddedildi'
-        : 'Başvurunuz inceleniyor';
+        ? 'Your application was rejected'
+        : 'Your application is under review';
     final description = statusMessage ??
         (_isRejected
-            ? 'Detaylı inceleme sonrası başvurunuz reddedildi. Güncellemeler için destek ekibiyle iletişime geçebilirsiniz.'
-            : 'Rendivo ekibi işletme başvurunuzu inceliyor. Onaylandığında bildirim alacaksınız.');
+            ? 'Your application was rejected after review. Please contact support for details.'
+            : 'The Rendivo team is reviewing your application. You will be notified once it is approved.');
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -1053,7 +1053,9 @@ class _PendingApprovalView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: _isRejected ? const Color(0xFFFFEBEE) : const Color(0xFFFFF3E0),
+            color: _isRejected
+                ? const Color(0xFFFFEBEE)
+                : const Color(0xFFFFF3E0),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -1082,7 +1084,7 @@ class _PendingApprovalView extends StatelessWidget {
               if (business?.reviewNotes?.isNotEmpty == true) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Not: ${business!.reviewNotes!}',
+                  'Note: ${business!.reviewNotes!}',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Colors.black87,
@@ -1099,7 +1101,7 @@ class _PendingApprovalView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Başvuru özeti',
+                  'Application Summary',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1107,19 +1109,19 @@ class _PendingApprovalView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _PendingInfoRow(
-                  label: 'İşletme adı',
+                  label: 'Business name',
                   value: business!.businessName,
                 ),
                 _PendingInfoRow(
-                  label: 'Durum',
-                  value: _isRejected ? 'Reddedildi' : 'Onay bekliyor',
+                  label: 'Status',
+                  value: _isRejected ? 'Rejected' : 'Pending approval',
                 ),
                 _PendingInfoRow(
-                  label: 'Gönderim tarihi',
+                  label: 'Submitted on',
                   value: _formatDate(business!.createdAt),
                 ),
                 _PendingInfoRow(
-                  label: 'Son güncelleme',
+                  label: 'Last update',
                   value: _formatDate(business!.approvedAt ?? business!.rejectedAt),
                 ),
               ],
@@ -1130,7 +1132,6 @@ class _PendingApprovalView extends StatelessWidget {
     );
   }
 }
-
 class _PendingInfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1172,3 +1173,4 @@ class _PendingInfoRow extends StatelessWidget {
     );
   }
 }
+
