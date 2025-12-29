@@ -324,7 +324,11 @@ class _CustomerSignUpScreenState extends State<CustomerSignUpScreen> {
                     controller: _phoneController,
                     hintText: '(123) 456-7890',
                     keyboardType: TextInputType.phone,
-                    validator: (value) => validatePhone(value ?? ''),
+                    validator: (value) {
+                      final trimmed = (value ?? '').trim();
+                      if (trimmed.isEmpty) return null;
+                      return validatePhone(trimmed);
+                    },
                   ),
                   const SizedBox(height: 16),
                   const Text(

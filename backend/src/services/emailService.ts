@@ -201,6 +201,79 @@ class EmailService {
     });
   }
 
+  static async sendAppointmentReminder(options: {
+    email: string;
+    type: 'week' | 'day';
+    name?: string;
+    businessName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime?: string;
+    services?: string[];
+    staffName?: string;
+    address?: string;
+  }): Promise<void> {
+    const copy =
+      options.type === 'week'
+        ? {
+            heading: 'Your appointment is next week',
+            intro:
+              'Just a friendly reminder that your appointment is coming up in <strong>one week</strong>.',
+            subject: `${BRAND_NAME} – Your appointment is next week`,
+            tip: 'Need to make changes? You can reschedule directly from the Rendivo app.',
+          }
+        : {
+            heading: 'Your appointment is tomorrow',
+            intro:
+              'We can’t wait to see you! Your appointment is scheduled for <strong>tomorrow</strong>.',
+            subject: `${BRAND_NAME} – Your appointment is tomorrow`,
+            tip: 'Try to arrive a few minutes early so everything starts right on time.',
+          };
+
+    const servicesBlock =
+      options.services && options.services.length > 0
+        ? `<p style="margin:0 0 12px;"><strong>Services:</strong> ${options.services.join(
+            ', '
+          )}</p>`
+        : '';
+    const staffBlock = options.staffName
+      ? `<p style="margin:0 0 12px;"><strong>Staff:</strong> ${options.staffName}</p>`
+      : '';
+    const addressBlock = options.address
+      ? `<p style="margin:0 0 12px;"><strong>Address:</strong> ${options.address}</p>`
+      : '';
+    const timeRange = options.endTime
+      ? `${options.startTime} – ${options.endTime}`
+      : options.startTime;
+
+    const body = `
+      <div style="text-align:center;">
+        <p style="margin:0 0 12px;">Hello ${options.name ?? 'there'},</p>
+        <p style="margin:0 0 12px;">${copy.intro}</p>
+        <div style="margin:18px 0;padding:16px;border-radius:12px;background-color:${BRAND_ACCENT};">
+          <p style="margin:0 0 8px;"><strong>Business:</strong> ${options.businessName}</p>
+          <p style="margin:0 0 8px;"><strong>Date:</strong> ${options.appointmentDate}</p>
+          <p style="margin:0 0 8px;"><strong>Time:</strong> ${timeRange}</p>
+          ${servicesBlock}
+          ${staffBlock}
+          ${addressBlock}
+        </div>
+        <p style="margin:0 0 12px;">${copy.tip}</p>
+      </div>
+    `;
+
+    const html = renderEmailLayout(
+      `<span style="display:block;text-align:center;">${copy.heading}</span>`,
+      body
+    );
+
+    await this.sendEmail({
+      to: options.email,
+      subject: copy.subject,
+      html,
+    });
+  }
+
   static async sendBusinessAppointmentCreated(options: {
     email: string;
     ownerName?: string;
