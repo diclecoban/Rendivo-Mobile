@@ -223,6 +223,7 @@ class _NotificationTile extends StatelessWidget {
         return Icons.cancel_rounded;
       case 'appointment_reminder_week':
       case 'appointment_reminder_day':
+      case 'appointment_reminder_hour':
         return Icons.alarm_rounded;
       case 'staff_added':
       case 'appointment_assigned':
@@ -244,6 +245,7 @@ class _NotificationTile extends StatelessWidget {
         return Colors.red.shade400;
       case 'appointment_reminder_week':
       case 'appointment_reminder_day':
+      case 'appointment_reminder_hour':
         return Colors.orange.shade600;
       case 'staff_added':
       case 'appointment_assigned':

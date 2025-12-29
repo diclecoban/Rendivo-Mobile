@@ -4,7 +4,7 @@ import  EmailService  from './emailService';
 export interface NotificationData {
   userId: string;
   type: 'appointment_booked' | 'appointment_cancelled_by_customer' | 'appointment_cancelled_by_business' | 
-        'appointment_reminder_week' | 'appointment_reminder_day' | 'staff_added' | 'staff_removed' |
+        'appointment_reminder_week' | 'appointment_reminder_day' | 'appointment_reminder_hour' | 'staff_added' | 'staff_removed' |
         'appointment_assigned' | 'appointment_assigned_cancelled' | 'appointment_rescheduled' | 'business_approved' | 'business_rejected';
   title: string;
   message: string;

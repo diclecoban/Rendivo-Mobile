@@ -268,7 +268,7 @@ async function sendHourReminders() {
 
       await notificationService.sendNotification({
         userId: appointment.customerId.toString(),
-        type: 'appointment_reminder_day',
+        type: 'appointment_reminder_hour',
         title: '🔔 Your Appointment is in 1 Hour!',
         message: `Time to get ready! Your appointment at ${appointmentData.business.businessName} starts soon! 💙`,
         relatedId: appointment.id.toString(),
