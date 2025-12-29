@@ -4,6 +4,28 @@ import { Business, User, StaffMember, Service, Appointment, Shift } from '../mod
 import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import { notificationService } from '../services/notificationService';
+import {
+  AppointmentWithRelations,
+  cancelAppointmentRecord,
+} from '../services/appointmentCancellationService';
+
+const getAppointmentStartAt = (appointment: Appointment): Date | null => {
+  try {
+    if (!appointment.appointmentDate || !appointment.startTime) return null;
+    const dateValue =
+      appointment.appointmentDate instanceof Date
+        ? appointment.appointmentDate
+        : new Date(appointment.appointmentDate);
+    const dateStr = dateValue.toISOString().split('T')[0];
+    const startTime =
+      appointment.startTime.length === 5
+        ? `${appointment.startTime}:00`
+        : appointment.startTime;
+    return new Date(`${dateStr}T${startTime}`);
+  } catch {
+    return null;
+  }
+};
 
 // Get all active businesses (for discover page)
 export const getAllBusinesses = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -504,7 +526,7 @@ export const getBusinessAvailability = async (req: AuthRequest, res: Response): 
 export const removeStaffMember = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
     const userId = req.user?.id;
-    const { staffId } = req.params;
+    const staffId = req.params.staffId || req.params.id;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -534,6 +556,71 @@ export const removeStaffMember = async (req: AuthRequest, res: Response): Promis
 
     if (!staffMember) {
       return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    // Cancel upcoming appointments assigned to this staff member
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcomingAppointments = await Appointment.findAll({
+      where: {
+        staffId: staffMember.id,
+        appointmentDate: { [Op.gte]: todayStr },
+      },
+      include: [
+        {
+          model: Service,
+          as: 'services',
+          attributes: ['name'],
+          through: { attributes: [] },
+        },
+        {
+          model: Business,
+          as: 'business',
+          attributes: ['businessName', 'email', 'ownerId'],
+          include: [
+            {
+              model: User,
+              as: 'owner',
+              attributes: ['id', 'fullName', 'firstName', 'email'],
+            },
+          ],
+        },
+        {
+          model: StaffMember,
+          as: 'staff',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'firstName', 'lastName', 'email'],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: 'customer',
+          attributes: ['id', 'fullName', 'email'],
+        },
+      ],
+    });
+
+    const now = new Date();
+    for (const appointment of upcomingAppointments) {
+      const startAt = getAppointmentStartAt(appointment);
+      if (!startAt || startAt <= now) {
+        continue;
+      }
+
+      try {
+        await cancelAppointmentRecord(appointment as AppointmentWithRelations, {
+          cancelledBy: 'business',
+          notifyStaff: false,
+        });
+      } catch (cancelError) {
+        console.error(
+          `Failed to cancel appointment ${appointment.id} before removing staff:`,
+          cancelError
+        );
+      }
     }
 
     // Save staff data BEFORE deletion

@@ -5,6 +5,10 @@ import { Appointment, Service, Business, StaffMember, User, AppointmentService }
 import { AppointmentStatus } from '../models/Appointment';
 import EmailService from '../services/emailService';
 import { notificationService } from '../services/notificationService';
+import {
+  AppointmentWithRelations,
+  cancelAppointmentRecord,
+} from '../services/appointmentCancellationService';
 
 const getAppointmentStartAt = (appointment: Appointment): Date | null => {
   try {
@@ -599,150 +603,10 @@ export const cancelAppointment = async (req: AuthRequest, res: Response): Promis
       return res.status(400).json({ message: 'Past appointments cannot be rescheduled.' });
     }
 
-    const appointmentDate = appointment.appointmentDate;
-    const startTime = appointment.startTime;
-    const businessName = appointment.business?.businessName || 'Rendivo Partner';
-    const customerEmail = appointment.customer?.email;
-    const customerName = appointment.customer?.fullName || 'Customer';
-    const owner = appointment.business?.owner;
-    const ownerEmail = owner?.email || appointment.business?.email;
-    const ownerName = owner?.fullName || owner?.firstName;
-    const staffUser = appointment.staff?.user;
-    const staffEmail = staffUser?.email;
-    const staffName =
-      staffUser?.fullName ||
-      [staffUser?.firstName, staffUser?.lastName].filter(Boolean).join(' ') ||
-      undefined;
-    const serviceNames =
-      appointment.services?.map((service) => service.name).filter(Boolean) ?? [];
-    const dateLabel = new Date(appointmentDate).toDateString();
-    const startLabel = startTime.substring(0, 5);
-    const appointmentId = appointment.id?.toString();
     const cancelledBy = isCustomer ? 'customer' : 'business';
-    const cancelType =
-      cancelledBy === 'customer'
-        ? 'appointment_cancelled_by_customer'
-        : 'appointment_cancelled_by_business';
-
-    await appointment.destroy();
-
-    if (customerEmail) {
-      try {
-        await EmailService.sendAppointmentCancellation({
-          email: customerEmail,
-          name: customerName,
-          businessName,
-          appointmentDate: dateLabel,
-          startTime: startLabel,
-        });
-      } catch (emailError) {
-        console.error('Failed to send cancellation email:', emailError);
-      }
-    }
-
-    if (ownerEmail) {
-      const ownerTargetEmail = ownerEmail as string;
-      try {
-        await EmailService.sendBusinessAppointmentCancelled({
-          email: ownerTargetEmail,
-          ownerName,
-          businessName,
-          customerName,
-          appointmentDate: dateLabel,
-          startTime: startLabel,
-          services: serviceNames,
-          staffName,
-        });
-      } catch (businessEmailError) {
-        console.error('Failed to send business cancellation email:', businessEmailError);
-      }
-    }
-
-    if (staffEmail) {
-      const staffTargetEmail = staffEmail as string;
-      try {
-        await EmailService.sendStaffAppointmentCancelled({
-          email: staffTargetEmail,
-          staffName,
-          businessName,
-          customerName,
-          appointmentDate: dateLabel,
-          startTime: startLabel,
-          services: serviceNames,
-        });
-      } catch (staffEmailError) {
-        console.error('Failed to send staff cancellation email:', staffEmailError);
-      }
-    }
-
-    const notificationTasks: Promise<void>[] = [];
-
-    if (customerEmail && appointment.customerId) {
-      notificationTasks.push(
-        notificationService
-          .sendNotification({
-            userId: appointment.customerId.toString(),
-            type: cancelType,
-            title: 'Appointment cancelled',
-            message:
-              cancelledBy === 'customer'
-                ? 'Your appointment was cancelled successfully.'
-                : 'Your appointment was cancelled by the business.',
-            relatedId: appointmentId,
-            relatedType: 'appointment',
-            actionUrl: `/appointments/${appointmentId}`,
-          })
-          .catch((error) => {
-            console.error('Failed to send customer cancellation notification:', error);
-          })
-      );
-    }
-
-    if (owner?.id) {
-      notificationTasks.push(
-        notificationService
-          .sendNotification({
-            userId: owner.id.toString(),
-            type: cancelType,
-            title: 'Appointment cancelled',
-            message:
-              cancelledBy === 'customer'
-                ? `${customerName} cancelled the appointment.`
-                : 'The appointment was cancelled by the business.',
-            relatedId: appointmentId,
-            relatedType: 'appointment',
-            actionUrl: `/appointments/${appointmentId}`,
-          })
-          .catch((error) => {
-            console.error('Failed to send owner cancellation notification:', error);
-          })
-      );
-    }
-
-    if (staffUser?.id) {
-      notificationTasks.push(
-        notificationService
-          .sendNotification({
-            userId: staffUser.id.toString(),
-            type: cancelType,
-            title: 'Appointment cancelled',
-            message:
-              cancelledBy === 'customer'
-                ? `${customerName} cancelled the appointment.`
-                : 'The appointment was cancelled by the business.',
-            relatedId: appointmentId,
-            relatedType: 'appointment',
-            actionUrl: `/appointments/${appointmentId}`,
-          })
-          .catch((error) => {
-            console.error('Failed to send staff cancellation notification:', error);
-          })
-      );
-    }
-
-    if (notificationTasks.length > 0) {
-      await Promise.all(notificationTasks);
-    }
+    await cancelAppointmentRecord(appointment as AppointmentWithRelations, {
+      cancelledBy,
+    });
 
     res.json({
       message: 'Appointment cancelled successfully',
