@@ -352,6 +352,7 @@ class _BusinessServicesScreenState extends State<BusinessServicesScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: selectedName,
+                      menuMaxHeight: 260,
                       items: dropdownServices
                           .map(
                             (item) => DropdownMenuItem(

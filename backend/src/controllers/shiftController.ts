@@ -375,7 +375,7 @@ export const getAvailableTimeSlots = async (req: AuthRequest, res: Response): Pr
       WHERE businessId = :businessId 
         AND staffId = :staffId 
         AND appointmentDate = :date 
-        AND status IN ('pending', 'confirmed')
+        AND status IN ('confirmed')
       ORDER BY startTime
     `, {
       replacements: { businessId, staffId, date },

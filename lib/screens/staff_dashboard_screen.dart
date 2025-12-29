@@ -695,9 +695,7 @@ class _BookingCard extends StatelessWidget {
     final lower = status.toLowerCase();
     final statusColor = lower == 'cancelled'
         ? Colors.redAccent
-        : lower == 'pending'
-            ? Colors.orange
-            : Colors.green;
+        : Colors.green;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -809,9 +807,7 @@ class _ScheduleCard extends StatelessWidget {
     final status = appointment.status.toLowerCase();
     final statusColor = status == 'cancelled'
         ? Colors.redAccent
-        : status == 'pending'
-            ? Colors.orange
-            : Colors.green;
+        : Colors.green;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

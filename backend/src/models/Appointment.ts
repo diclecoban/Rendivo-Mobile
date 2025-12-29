@@ -6,7 +6,6 @@ import StaffMember from './StaffMember';
 import Service from './Service';
 
 export enum AppointmentStatus {
-  PENDING = 'pending',
   CONFIRMED = 'confirmed',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',

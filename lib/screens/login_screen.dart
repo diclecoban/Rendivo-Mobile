@@ -153,27 +153,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           fit: BoxFit.cover,
                         ),
                       ),
-                      Positioned(
-                        top: 12,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
-                                blurRadius: 12,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.contain,
-                          ),
+                      Center(
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          width: 180,
+                          height: 180,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ],

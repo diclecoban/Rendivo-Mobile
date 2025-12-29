@@ -212,7 +212,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       where: {
         businessId,
         appointmentDate: { [Op.gte]: today },
-        status: { [Op.in]: ['pending', 'confirmed'] },
+        status: { [Op.in]: ['confirmed'] },
       },
       include: [
         {
@@ -246,7 +246,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
     const totalAppointments = await Appointment.count({
       where: {
         businessId,
-        status: { [Op.in]: ['pending', 'confirmed', 'completed'] },
+        status: { [Op.in]: ['confirmed', 'completed'] },
       },
     });
 
@@ -255,14 +255,14 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       where: {
         businessId,
         appointmentDate: today,
-        status: { [Op.in]: ['pending', 'confirmed'] },
+        status: { [Op.in]: ['confirmed'] },
       },
     });
     const yesterdayCount = await Appointment.count({
       where: {
         businessId,
         appointmentDate: yesterday,
-        status: { [Op.in]: ['pending', 'confirmed'] },
+        status: { [Op.in]: ['confirmed'] },
       },
     });
 
@@ -271,7 +271,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       where: {
         businessId,
         appointmentDate: { [Op.gte]: startOfWeek },
-        status: { [Op.in]: ['pending', 'confirmed', 'completed'] },
+        status: { [Op.in]: ['confirmed', 'completed'] },
       },
       distinct: true,
       col: 'customerId',
@@ -281,7 +281,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       where: {
         businessId,
         appointmentDate: { [Op.between]: [lastWeekStart, lastWeekEnd] },
-        status: { [Op.in]: ['pending', 'confirmed', 'completed'] },
+        status: { [Op.in]: ['confirmed', 'completed'] },
       },
       distinct: true,
       col: 'customerId',
@@ -295,7 +295,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
       where: {
         businessId,
         appointmentDate: yesterday,
-        status: { [Op.in]: ['pending', 'confirmed', 'completed'] },
+        status: { [Op.in]: ['confirmed', 'completed'] },
       },
     });
     const yesterdayRevenue = yesterdayAppointments.reduce((sum, apt) => sum + parseFloat(apt.totalPrice.toString()), 0);
@@ -329,7 +329,7 @@ export const getBusinessDashboard = async (req: AuthRequest, res: Response): Pro
           businessId,
           staffId: member.id,
           appointmentDate: today,
-          status: { [Op.in]: ['confirmed', 'pending'] },
+          status: { [Op.in]: ['confirmed'] },
         },
         order: [['startTime', 'ASC']],
       });

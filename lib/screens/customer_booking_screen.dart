@@ -180,6 +180,14 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
 
   int get _effectiveDuration => _totalDuration > 0 ? _totalDuration : 30;
 
+  DateTime _maxBookableDateTime() {
+    return DateTime.now().add(const Duration(days: 30));
+  }
+
+  bool _isBeyondBookingWindow(DateTime startAt) {
+    return startAt.isAfter(_maxBookableDateTime());
+  }
+
   String _formatTime(DateTime dt) {
     final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final minute = dt.minute.toString().padLeft(2, '0');
@@ -290,6 +298,14 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
     final start = _selectedSlotStart;
     if (start == null) {
       AppSnackbar.show(context, 'Select an available time slot.');
+      return;
+    }
+
+    if (_isBeyondBookingWindow(start)) {
+      AppSnackbar.show(
+        context,
+        'You can only book up to 1 month in advance.',
+      );
       return;
     }
 
@@ -916,6 +932,13 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen> {
                 onTap: isBooked
                     ? null
                     : () {
+                        if (_isBeyondBookingWindow(start)) {
+                          AppSnackbar.show(
+                            context,
+                            'You can only book up to 1 month in advance.',
+                          );
+                          return;
+                        }
                         setState(() {
                           _selectedSlotStart = start;
                         });

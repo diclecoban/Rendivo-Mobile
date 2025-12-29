@@ -32,16 +32,8 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
   String? _error;
   String _businessId = '';
   String _statusFilter = 'all';
-  String _roleFilter = 'all';
   bool _copySuccess = false;
   String? _removingStaffId;
-
-  final List<String> _defaultRoles = const [
-    'Senior Stylist',
-    'Junior Stylist',
-    'Massage Therapist',
-    'Nail Technician',
-  ];
 
   @override
   void initState() {
@@ -87,30 +79,15 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
     }
   }
 
-  List<String> get _roles {
-    final roles = <String>{..._defaultRoles};
-    for (final member in _staff) {
-      final role = member.position.trim();
-      if (role.isNotEmpty) roles.add(role);
-    }
-    final sorted = roles.toList()..sort();
-    return ['All', ...sorted];
-  }
-
   List<StaffProfile> get _filteredStaff {
     final query = _searchController.text.trim().toLowerCase();
     return _staff.where((member) {
       final name = member.displayName.toLowerCase();
-      final role = member.position.toLowerCase();
-      final matchesSearch =
-          query.isEmpty || name.contains(query) || role.contains(query);
+      final matchesSearch = query.isEmpty || name.contains(query);
       final matchesStatus = _statusFilter == 'all' ||
           (_statusFilter == 'active' && member.isActive) ||
           (_statusFilter == 'inactive' && !member.isActive);
-      final matchesRole = _roleFilter == 'all' ||
-          _roleFilter == 'All' ||
-          member.position == _roleFilter;
-      return matchesSearch && matchesStatus && matchesRole;
+      return matchesSearch && matchesStatus;
     }).toList();
   }
 
@@ -326,7 +303,7 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
           controller: _searchController,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),
-            hintText: 'Search by name or role...',
+            hintText: 'Search by name...',
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -360,36 +337,6 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
                 },
                 decoration: const InputDecoration(
                   labelText: 'Status',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _roleFilter == 'all' ? 'All' : _roleFilter,
-                isExpanded: true,
-                items: _roles
-                    .map(
-                      (role) => DropdownMenuItem(
-                        value: role,
-                        child: Text(
-                          role,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _roleFilter = value == 'All' ? 'all' : value;
-                  });
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Role',
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(),
@@ -478,13 +425,6 @@ class _StaffCard extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  member.position.isNotEmpty
-                      ? member.position
-                      : 'Staff Member',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 6),
                 _StatusBadge(isActive: member.isActive),
@@ -684,15 +624,6 @@ class _StaffDetailDialog extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    member.position.isNotEmpty
-                        ? member.position
-                        : 'Staff Member',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
                     ),
                   ),
                 ],
