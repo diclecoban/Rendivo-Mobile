@@ -197,6 +197,7 @@ class BackendService {
     required String lastName,
     required String email,
     required String password,
+    required String phone,
     required String businessId,
   }) async {
     final uri = Uri.parse('$_baseUrl/auth/register/staff');
@@ -210,6 +211,7 @@ class BackendService {
         'lastName': lastName,
         'email': email,
         'password': password,
+        'phone': phone,
         'businessId': businessId,
       }),
     );
@@ -494,6 +496,15 @@ class BackendService {
               ))
           .toList();
     });
+  }
+
+  Future<void> removeStaffMember(String staffId) async {
+    final uri = Uri.parse('$_baseUrl/business/staff/$staffId');
+    final response = await _client.delete(
+      uri,
+      headers: _headers(withAuth: true),
+    );
+    _handleResponse(response, (_) => null);
   }
 
   Future<ShiftItem> createShift({

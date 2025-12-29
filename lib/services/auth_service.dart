@@ -33,6 +33,7 @@ class AuthService {
     required String lastName,
     required String email,
     required String password,
+    required String phone,
     required String businessId,
   }) async {
     return _backend.registerStaff(
@@ -40,6 +41,7 @@ class AuthService {
       lastName: lastName,
       email: email,
       password: password,
+      phone: phone,
       businessId: businessId,
     );
   }

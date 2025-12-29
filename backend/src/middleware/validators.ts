@@ -13,6 +13,7 @@ export const registerStaffValidation = [
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('fullName').trim().notEmpty().withMessage('Full name is required'),
   body('businessId').trim().notEmpty().withMessage('Business ID is required'),
+  body('phone').trim().notEmpty().withMessage('Phone number is required'),
 ];
 
 export const registerBusinessValidation = [

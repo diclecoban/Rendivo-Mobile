@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/widgets/app_snackbar.dart';
@@ -17,6 +18,7 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _businessIdController = TextEditingController();
@@ -30,6 +32,7 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _businessIdController.dispose();
@@ -48,33 +51,24 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Logo + isim
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFFE66ACF),
-                            Color(0xFFFB9BEF),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    alignment: WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    children: [
+                      
+                      const Text(
+                        'Rendivo',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: primaryPink,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Rendivo',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 24),
@@ -147,6 +141,24 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
                   controller: _emailController,
                   hintText: 'Enter your email address',
                   keyboardType: TextInputType.emailAddress,
+                ),
+
+                const SizedBox(height: 16),
+
+                // Phone Number
+                const Text(
+                  'Phone Number',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _phoneController,
+                  hintText: 'Enter your phone number',
+                  keyboardType: TextInputType.phone,
                 ),
 
                 const SizedBox(height: 16),
@@ -389,6 +401,7 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
     final businessId = _businessIdController.text.trim();
@@ -396,6 +409,7 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
+        phone.isEmpty ||
         password.isEmpty ||
         businessId.isEmpty) {
       AppSnackbar.show(context, 'Please fill in all fields.');
@@ -414,6 +428,7 @@ class _StaffSignUpScreenState extends State<StaffSignUpScreen> {
         lastName: lastName,
         email: email,
         password: password,
+        phone: phone,
         businessId: businessId,
       );
       if (!mounted) return;

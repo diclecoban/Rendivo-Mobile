@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../core/theme/app_colors.dart';
 import '../core/utils/validators.dart';
 import '../core/widgets/app_snackbar.dart';
@@ -145,9 +144,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 SizedBox(
                   height: size.height * 0.33,
                   width: double.infinity,
-                  child: Image.asset(
-                    'assets/images/login_header.png',
-                    fit: BoxFit.cover,
+                  child: Stack(
+                    alignment: Alignment.topCenter,
+                    children: [
+                      Positioned.fill(
+                        child: Image.asset(
+                          'assets/images/login_header.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 12,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.12),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Padding(

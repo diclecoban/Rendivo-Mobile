@@ -42,33 +42,23 @@ class _BusinessOwnerSignUpScreenState extends State<BusinessOwnerSignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Logo + isim
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFFE66ACF),
-                            Color(0xFFFB9BEF),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    alignment: WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    children: const [
+                      Text(
+                        'Rendivo',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: primaryPink,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Rendivo',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 24),

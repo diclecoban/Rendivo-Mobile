@@ -145,11 +145,11 @@ export const registerCustomer = async (req: AuthRequest, res: Response): Promise
 // Register Staff (Local Auth)
 export const registerStaff = async (req: AuthRequest, res: Response): Promise<Response | void> => {
   try {
-    const { email, password, fullName, firstName, lastName, businessId } = req.body;
+    const { email, password, fullName, firstName, lastName, businessId, phone } = req.body;
 
-    if (!email || !password || !businessId) {
+    if (!email || !password || !businessId || !phone) {
       return res.status(400).json({
-        message: 'All fields are required: email, password, businessId',
+        message: 'All fields are required: email, password, businessId, phone',
       });
     }
 
@@ -189,6 +189,7 @@ export const registerStaff = async (req: AuthRequest, res: Response): Promise<Re
       fullName: resolvedFullName,
       firstName,
       lastName,
+      phone,
       role: UserRole.STAFF,
       authProvider: AuthProvider.LOCAL,
       emailVerified: false,
