@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/theme/staff_palette.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
@@ -210,29 +211,12 @@ class _BusinessScheduleScreenState extends State<BusinessScheduleScreen> {
   }
 
   Color _staffColor(String staffId) {
-    final colors = [
-      const Color(0xFFFFE7EE),
-      const Color(0xFF4B3F72),
-      const Color(0xFF2F3E6E),
-      const Color(0xFF2F5D50),
-      const Color(0xFF3D3A5C),
-      const Color(0xFF1F4F5A),
-    ];
-    final index = (int.tryParse(staffId) ?? staffId.hashCode).abs();
-    return colors[index % colors.length];
+    return staffPastelColorForId(staffId);
   }
 
   Color _staffTextColor(String staffId) {
-    final colors = [
-      const Color(0xFFE91E63),
-      const Color(0xFF5E35B1),
-      const Color(0xFF3F51B5),
-      const Color(0xFF2E7D32),
-      const Color(0xFFF57C00),
-      const Color(0xFF00796B),
-    ];
-    final index = (int.tryParse(staffId) ?? staffId.hashCode).abs();
-    return colors[index % colors.length];
+    final base = staffPastelColorForId(staffId);
+    return staffPastelTextColor(base);
   }
 
   void _goToToday() {

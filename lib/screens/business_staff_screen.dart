@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/theme/staff_palette.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../models/app_models.dart';
 import '../services/backend_service.dart';
@@ -10,6 +11,9 @@ import 'business_dashboard_screen.dart';
 import 'business_schedule_screen.dart';
 import 'business_services_screen.dart';
 import 'business_appointments_screen.dart';
+
+const _addStaffButtonBackground = Color(0xFFFCE6F3);
+const _addStaffButtonForeground = Color(0xFFB44F8E);
 
 class BusinessStaffScreen extends StatefulWidget {
   final bool? isPending;
@@ -289,7 +293,8 @@ class _BusinessStaffScreenState extends State<BusinessStaffScreen> {
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Staff'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryPink,
+                backgroundColor: _addStaffButtonBackground,
+                foregroundColor: _addStaffButtonForeground,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -387,6 +392,8 @@ class _StaffCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = _initials(member.displayName);
+    final accent = staffPastelColorForId(member.id);
+    final accentText = staffPastelTextColor(accent);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -405,11 +412,11 @@ class _StaffCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: primaryPink.withOpacity(0.15),
+            backgroundColor: accent,
             child: Text(
               initials,
-              style: const TextStyle(
-                color: primaryPink,
+              style: TextStyle(
+                color: accentText,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -596,6 +603,8 @@ class _StaffDetailDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = member.user;
+    final accent = staffPastelColorForId(member.id);
+    final accentText = staffPastelTextColor(accent);
     return AlertDialog(
       title: const Text('Staff Details'),
       content: Column(
@@ -606,11 +615,11 @@ class _StaffDetailDialog extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: primaryPink.withOpacity(0.15),
+                backgroundColor: accent,
                 child: Text(
                   _initials(member.displayName),
-                  style: const TextStyle(
-                    color: primaryPink,
+                  style: TextStyle(
+                    color: accentText,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
