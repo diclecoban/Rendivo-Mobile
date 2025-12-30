@@ -58,8 +58,18 @@ class BackendService {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    final token = _session.authToken;
-    if (withAuth && token != null && token.isNotEmpty) {
+    if (withAuth) {
+      final token = _session.authToken;
+      if (token == null || token.isEmpty) {
+        throw const AppException('Not authenticated.', statusCode: 401);
+      }
+      if (_session.isTokenExpired(token)) {
+        _session.handleTokenExpired();
+        throw const AppException(
+          'Session expired. Please log in again.',
+          statusCode: 401,
+        );
+      }
       headers['Authorization'] = 'Bearer $token';
     }
     return headers;
@@ -79,6 +89,9 @@ class BackendService {
     T Function(dynamic json) mapper,
   ) {
     final decoded = _decodeBody(response);
+    if (response.statusCode == 401 && _session.authToken != null) {
+      _session.handleTokenExpired();
+    }
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
         return mapper(decoded);

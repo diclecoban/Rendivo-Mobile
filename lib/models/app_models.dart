@@ -35,6 +35,13 @@ class AuthUser {
       authToken: token,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'email': email,
+        'fullName': fullName,
+        'role': role,
+      };
 }
 
 class Address {
