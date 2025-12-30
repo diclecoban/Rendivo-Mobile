@@ -13,11 +13,13 @@ const List<Color> staffPastelPalette = <Color>[
 ];
 
 Color staffPastelColorForId(String id) {
-  if (staffPastelPalette.isEmpty) {
+  final safeId = id.trim();
+  if (safeId.isEmpty) {
     return const Color(0xFFF7E8F3);
   }
-  final safeIndex = id.isEmpty ? 0 : id.hashCode.abs();
-  return staffPastelPalette[safeIndex % staffPastelPalette.length];
+  final hash = safeId.hashCode.abs();
+  final hue = (hash % 360).toDouble();
+  return HSLColor.fromAHSL(1.0, hue, 0.45, 0.86).toColor();
 }
 
 Color staffPastelTextColor(Color base) {
