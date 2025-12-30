@@ -10,6 +10,7 @@ import 'screens/customer_dashboard_screen.dart';
 import 'screens/staff_dashboard_screen.dart';
 import 'services/backend_service.dart';
 import 'services/notification_service.dart';
+import 'services/session_service.dart';
 
 const BorderRadius _buttonRadius = BorderRadius.all(Radius.circular(18));
 const Duration _buttonAnimDuration = Duration(milliseconds: 180);
@@ -52,6 +53,9 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final session = SessionService.instance;
+    final user = session.currentUser;
+    final hasSession = session.hasValidSession;
     final baseTextTheme =
         GoogleFonts.nunitoTextTheme(ThemeData.light().textTheme);
     final textTheme = baseTextTheme.copyWith(
@@ -203,7 +207,14 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
       ),
-      home: const LoginScreen(),
+      home: !hasSession
+          ? const LoginScreen()
+          : switch (user!.role) {
+              'admin' => const AdminDashboardScreen(),
+              'business_owner' => const BusinessDashboardScreen(),
+              'staff' => const StaffDashboardScreen(),
+              _ => const CustomerDashboardScreen(),
+            },
     );
   }
 }
